@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inscripción · CLEAN SEA Academy</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/src/inscripcion.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="brand">
+    <img src="/assets/logo.png" alt="" width="56" height="56">
+    <div><p class="name">CLEAN SEA <span>ACADEMY</span></p><p class="sub">Registro de asistencia</p></div>
+  </header>
+
+  <section class="card" id="cargando"><p class="muted">Cargando el curso…</p></section>
+
+  <section class="card" id="noCurso" hidden>
+    <h1>Curso no encontrado</h1>
+    <p class="muted">El código QR no corresponde a un curso vigente. Pedile al instructor que lo vuelva a mostrar.</p>
+  </section>
+
+  <section class="card" id="cerrado" hidden>
+    <h1 class="ctitulo"></h1>
+    <p class="cmeta muted"></p>
+    <div class="msg warn">La inscripción a este curso ya está cerrada. Si asististe y no te anotaste, avisale al instructor.</div>
+  </section>
+
+  <section class="card" id="formCard" hidden>
+    <p class="eyebrow">Curso</p>
+    <h1 class="ctitulo"></h1>
+    <p class="cmeta muted"></p>
+    <form id="form" novalidate>
+      <label>Nombre y apellido
+        <input id="fNombre" autocomplete="name" required maxlength="120" placeholder="Como querés que figure en el certificado">
+        <small id="fNombreVista"></small></label>
+      <label>DNI o pasaporte
+        <input id="fDni" autocomplete="off" required maxlength="24" placeholder="Sin puntos"></label>
+      <label>Empresa
+        <input id="fEmpresa" autocomplete="organization" required maxlength="120"></label>
+      <label>Cargo / puesto
+        <input id="fCargo" autocomplete="organization-title" required maxlength="120"></label>
+      <label>Email
+        <input id="fEmail" type="email" inputmode="email" autocomplete="email" required maxlength="200" placeholder="Ahí te llega el certificado"></label>
+      <label>Teléfono / WhatsApp
+        <input id="fTel" type="tel" inputmode="tel" autocomplete="tel" required maxlength="40" placeholder="Ej.: +54 9 11 5555-5555"></label>
+      <p class="legal">Tus datos los usa CLEAN SEA S.A. para emitir tu certificado y para contactarte sobre capacitaciones y servicios. Podés pedir que los corrijamos o eliminemos escribiéndonos.</p>
+      <div id="fMsg"></div>
+      <button type="submit" id="fBtn">Registrar asistencia</button>
+    </form>
+  </section>
+
+  <section class="card" id="listo" hidden>
+    <div class="ok-mark" aria-hidden="true">✓</div>
+    <h1 id="lTitulo">¡Listo!</h1>
+    <p id="lTexto"></p>
+    <p class="muted" style="font-size:13px">Si te equivocaste en algún dato, volvé a escanear el QR y cargalo de nuevo con el mismo DNI: se actualiza.</p>
+  </section>
+</main>
+<script type="module" src="/src/inscripcion.js"></script>
+</body>
+</html>

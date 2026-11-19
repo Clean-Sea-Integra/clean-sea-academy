@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CLEAN SEA Academy</title>
+<link rel="icon" type="image/png" href="/assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/src/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="login" id="login">
+  <form class="login-box" id="loginForm">
+    <img src="/assets/logo.png" alt="" width="64" height="64">
+    <h1>CLEAN SEA <span>ACADEMY</span></h1>
+    <p class="muted">Ingresá con tu cuenta de Integra.</p>
+    <label class="f" for="lEmail"><span>Email</span><input type="email" id="lEmail" autocomplete="username" required></label>
+    <label class="f" for="lPass"><span>Contraseña</span><input type="password" id="lPass" autocomplete="current-password" required></label>
+    <button class="btn primary big" type="submit" id="lBtn">Ingresar</button>
+    <div id="lMsg"></div>
+  </form>
+</div>
+<div id="app" hidden>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <img src="/assets/logo.png" alt="CLEAN SEA">
+      <div class="vd"></div>
+      <div><h1>CLEAN SEA <span>ACADEMY</span></h1><p>Generador de Certificados</p></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="states">
+      <div class="dl-state"><span class="dot" id="dbDot"></span><span id="dbText">Conectando base de datos…</span></div>
+      <div class="dl-state"><span id="meName"></span><button class="btn ghost" id="logout" type="button" style="margin-left:8px">Salir</button></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button role="tab" id="t-cur" aria-controls="p-cur" aria-selected="true"><span class="n">0</span>Cursos <span class="badge" id="tabCur">0</span></button>
+    <button role="tab" id="t-ind" aria-controls="p-ind" aria-selected="false"><span class="n">1</span>Individual</button>
+    <button role="tab" id="t-mas" aria-controls="p-mas" aria-selected="false"><span class="n">2</span>Masivo <span class="badge" id="tabCount">0</span></button>
+    <button role="tab" id="t-pre" aria-controls="p-pre" aria-selected="false"><span class="n">3</span>Vista previa</button>
+    <button role="tab" id="t-des" aria-controls="p-des" aria-selected="false"><span class="n">4</span>Descargas <span class="badge" id="tabFiles">0</span></button>
+    <button role="tab" id="t-reg" aria-controls="p-reg" aria-selected="false"><span class="n">5</span>Registro <span class="badge" id="tabReg">0</span></button>
+  </nav>
+
+  <!-- 0 · CURSOS (inscripción por QR) -->
+  <section class="panel" id="p-cur" role="tabpanel" aria-labelledby="t-cur">
+    <div class="grid">
+      <div class="card c5">
+        <p class="eyebrow">Nuevo curso</p>
+        <h2>Crear curso</h2>
+        <div class="rule"></div>
+        <form id="cForm" class="fields" novalidate>
+          <label class="f full" for="cTitulo"><span>Título del curso <span class="req">obligatorio</span></span>
+            <textarea id="cTitulo" rows="2" placeholder="Ej.: Respuesta ante derrames de hidrocarburos — Nivel I"></textarea>
+            <small>Tal como va a figurar en el certificado.</small></label>
+          <label class="f" for="cFecha"><span>Fecha <span class="req">obligatorio</span></span><input type="date" id="cFecha"></label>
+          <label class="f" for="cLugar"><span>Lugar</span><input type="text" id="cLugar" autocomplete="off" placeholder="Ej.: Base Dock Sud"></label>
+          <label class="f full" for="cInstructor"><span>Instructor</span><input type="text" id="cInstructor" autocomplete="off"></label>
+          <div class="btns full"><button type="submit" class="btn primary">Crear curso y QR</button></div>
+        </form>
+        <div id="cMsg"></div>
+      </div>
+      <div class="card c7">
+        <p class="eyebrow">Cursos</p>
+        <h2>Elegí un curso</h2>
+        <div class="rule"></div>
+        <div class="tablebox" id="cList"></div>
+      </div>
+
+      <div class="card c12" id="cDet" hidden>
+        <div class="cd-head">
+          <div class="cd-info">
+            <p class="eyebrow">Curso seleccionado</p>
+            <h2 id="cdTitulo"></h2>
+            <p class="muted" id="cdMeta" style="margin:4px 0 8px"></p>
+            <div id="cdEstado"></div>
+            <p style="margin:12px 0 4px;font-size:13px">Link de inscripción: <a id="cdLink" target="_blank" rel="noopener" class="mono" style="font-size:12px;word-break:break-all"></a></p>
+            <div class="btns" style="margin-top:10px">
+              <button class="btn primary" id="cdProyectar" type="button">Proyectar QR</button>
+              <button class="btn" id="cdQrPng" type="button">Descargar QR (PNG)</button>
+              <button class="btn" id="cdCopiar" type="button">Copiar link</button>
+              <button class="btn" id="cdAbrir" type="button">Cerrar inscripción</button>
+            </div>
+          </div>
+          <canvas id="cdQr" width="220" height="220" aria-label="Código QR de inscripción"></canvas>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="v" id="ckTotal">0</div><div class="l">Inscriptos</div></div>
+          <div class="kpi ok"><div class="v" id="ckEnv">0</div><div class="l">Diploma enviado</div></div>
+          <div class="kpi warn"><div class="v" id="ckPend">0</div><div class="l">Pendientes</div></div>
+          <div class="kpi err"><div class="v" id="ckErr">0</div><div class="l">Con errores</div></div>
+          <div class="kpi"><div class="v" id="ckSel">0</div><div class="l">Seleccionados</div></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="cdEnviar" type="button">Enviar diplomas por mail</button>
+          <button class="btn" id="cdMasivo" type="button">Cargar en Masivo (ZIP)</button>
+          <button class="btn" id="cdExcel" type="button">Exportar inscriptos</button>
+          <span style="flex:1"></span>
+          <button class="btn ghost danger" id="cdBorrar" type="button">Eliminar curso</button>
+        </div>
+        <p class="muted" style="margin:0 0 8px;font-size:12.5px">«Enviar diplomas» manda a los seleccionados, o si no hay selección, a todos los que todavía no lo recibieron. Nombre, empresa y email se pueden corregir en la tabla.</p>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th class="chk"><input type="checkbox" id="cdSelAll" aria-label="Seleccionar todos"></th><th>N.º</th><th>Nombre y apellido</th><th>Empresa</th><th>DNI</th><th>Email</th><th>Teléfono / cargo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="cdBody"></tbody>
+          </table>
+        </div>
+        <div id="cdMsg"></div>
+        <div id="cdPrev" hidden style="margin-top:14px">
+          <div class="paper"><canvas id="cdCanvas" width="1684" height="1192" aria-label="Vista previa del diploma"></canvas></div>
+          <div class="cap" id="cdPrevCap"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1 · INDIVIDUAL -->
+  <section class="panel" id="p-ind" role="tabpanel" aria-labelledby="t-ind" hidden>
+    <div class="grid">
+      <div class="card c5">
+        <p class="eyebrow">Modalidad individual</p>
+        <h2>Un certificado</h2>
+        <div class="rule"></div>
+        <form id="indForm" class="fields" novalidate>
+          <label class="f full" for="iTitle"><span>Título del curso <span class="req">obligatorio</span></span>
+            <textarea id="iTitle" rows="2" placeholder="Ej.: Respuesta ante derrames de hidrocarburos — Nivel I"></textarea></label>
+          <label class="f" for="iDate"><span>Fecha del curso <span class="req">obligatorio</span></span>
+            <input type="date" id="iDate"></label>
+          <label class="f" for="iCompany"><span>Empresa <span class="req">obligatorio</span></span>
+            <input type="text" id="iCompany" autocomplete="off" placeholder="Ej.: YPF">
+            <small>Sólo para el nombre del archivo y el registro. No se imprime.</small></label>
+          <label class="f full" for="iName"><span>Nombre y apellido <span class="req">obligatorio</span></span>
+            <input type="text" id="iName" autocomplete="off" placeholder="Ej.: Juan Carlos Pérez"></label>
+          <div class="btns full">
+            <button type="submit" class="btn primary" id="iGen">Generar PDF</button>
+            <button type="button" class="btn" id="iDl" disabled>Descargar PDF</button>
+          </div>
+        </form>
+        <div id="iMsg"></div>
+      </div>
+      <div class="card c7">
+        <p class="eyebrow">Vista previa</p>
+        <div class="paper"><canvas id="iCanvas" width="1684" height="1192" aria-label="Vista previa del certificado individual"></canvas></div>
+        <div class="cap" id="iCap">La vista previa se actualiza mientras completás el formulario. Es el mismo PDF que se descarga.</div>
+        <div class="notes" id="iNotes"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · MASIVO -->
+  <section class="panel" id="p-mas" role="tabpanel" aria-labelledby="t-mas" hidden>
+    <div class="grid">
+      <div class="card c5">
+        <p class="eyebrow">Paso 1 · Datos generales del curso</p>
+        <h2>Curso</h2>
+        <div class="rule"></div>
+        <div class="fields">
+          <label class="f full" for="mTitle"><span>Título del curso <span class="req">obligatorio</span></span>
+            <textarea id="mTitle" rows="3" placeholder="Ej.: Respuesta ante derrames de hidrocarburos — Nivel I"></textarea></label>
+          <label class="f" for="mDate"><span>Fecha del curso <span class="req">obligatorio</span></span>
+            <input type="date" id="mDate"></label>
+          <label class="f" for="mShort"><span>Curso en el nombre del ZIP</span>
+            <input type="text" id="mShort" autocomplete="off" placeholder="Automático">
+            <small id="mShortHint">Si queda vacío se usa el título, abreviado.</small></label>
+        </div>
+        <div id="mCourseMsg"></div>
+      </div>
+      <div class="card c7">
+        <p class="eyebrow">Paso 2 · Participantes</p>
+        <h2>Cargar la lista</h2>
+        <div class="rule"></div>
+        <div class="drop" id="drop">
+          <p style="margin:0 0 12px">Arrastrá un archivo <b>Excel (.xlsx)</b> o <b>CSV</b> con las columnas <span class="mono">EMPRESA</span> y <span class="mono">NOMBRE Y APELLIDO</span>.</p>
+          <div class="btns" style="justify-content:center">
+            <span class="btn primary filebtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 11V2M4.5 5.5 8 2l3.5 3.5M2.5 10v3.5h11V10"/></svg>Importar Excel o CSV<input type="file" id="fileIn" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Importar Excel o CSV"></span>
+            <button class="btn" id="tplBtn" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 2v9M4.5 7.5 8 11l3.5-3.5M2.5 13.5h11"/></svg>Descargar plantilla Excel</button>
+            <button class="btn" id="addBtn" type="button">+ Agregar participante</button>
+          </div>
+        </div>
+        <div id="impMsg"></div>
+      </div>
+
+      <div class="card c12">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div><p class="eyebrow">Paso 3 · Revisión</p><h2>Participantes</h2></div>
+          <p class="muted" style="margin:0;font-size:12.5px">Los cambios en la tabla se guardan al salir de cada celda.</p>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="v" id="kTotal">0</div><div class="l">Total</div></div>
+          <div class="kpi ok"><div class="v" id="kOk">0</div><div class="l">Registros válidos</div></div>
+          <div class="kpi err"><div class="v" id="kErr">0</div><div class="l">Con errores</div></div>
+          <div class="kpi warn"><div class="v" id="kDup">0</div><div class="l">Posibles duplicados</div></div>
+          <div class="kpi"><div class="v" id="kSel">0</div><div class="l">Seleccionados</div></div>
+        </div>
+        <div class="toolbar">
+          <label class="sr" for="q">Buscar por nombre</label>
+          <input type="search" id="q" placeholder="Buscar por nombre o empresa">
+          <label class="sr" for="fCo">Filtrar por empresa</label>
+          <select id="fCo"><option value="">Todas las empresas</option></select>
+          <label class="sr" for="fSt">Filtrar por estado</label>
+          <select id="fSt"><option value="">Todos los estados</option><option value="err">Con errores</option><option value="dup">Posibles duplicados</option><option value="ok">Válidos</option></select>
+          <label class="sr" for="sortBy">Ordenar</label>
+          <select id="sortBy"><option value="row">Orden de carga</option><option value="name">Nombre A–Z</option><option value="company">Empresa A–Z</option></select>
+          <span style="flex:1"></span>
+          <button class="btn ghost danger" id="delSel" type="button" disabled>Eliminar seleccionados</button>
+          <button class="btn ghost danger" id="clearAll" type="button" disabled>Vaciar lista</button>
+        </div>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th class="chk"><input type="checkbox" id="selAll" aria-label="Seleccionar todos los visibles"></th><th>N.º</th><th>Empresa</th><th>Nombre y apellido</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty" id="emptyState">
+            <h3>Todavía no hay participantes</h3>
+            <p style="margin:0">Importá el Excel del curso o agregá participantes a mano. Si es la primera vez, descargá la plantilla Excel.</p>
+          </div>
+        </div>
+        <div class="genbar">
+          <button class="btn primary big" id="genBtn" type="button">Generar certificados</button>
+          <div class="progress" id="prog" hidden><div class="bar"><i id="progBar"></i></div><div class="t" id="progTxt"></div></div>
+          <div id="genScope" class="muted" style="font-size:12.5px"></div>
+        </div>
+        <div id="genMsg"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · VISTA PREVIA -->
+  <section class="panel" id="p-pre" role="tabpanel" aria-labelledby="t-pre" hidden>
+    <div class="card">
+      <p class="eyebrow">Vista previa del PDF final</p>
+      <h2>Certificado por participante</h2>
+      <div class="rule"></div>
+      <div class="pv-nav">
+        <button class="btn" id="pvPrev" type="button" aria-label="Participante anterior">← Anterior</button>
+        <label class="sr" for="pvSel">Participante</label>
+        <select id="pvSel"></select>
+        <button class="btn" id="pvNext" type="button" aria-label="Participante siguiente">Siguiente →</button>
+      </div>
+      <div class="paper"><canvas id="pCanvas" width="1684" height="1192" aria-label="Vista previa del certificado seleccionado"></canvas></div>
+      <div class="cap" id="pCap">Cargá participantes en la pestaña Masivo para revisar cada certificado.</div>
+      <div class="notes" id="pNotes"></div>
+    </div>
+  </section>
+
+  <!-- 4 · DESCARGAS -->
+  <section class="panel" id="p-des" role="tabpanel" aria-labelledby="t-des" hidden>
+    <div class="grid">
+      <div class="card c7">
+        <p class="eyebrow">Lote generado</p>
+        <h2 id="dTitle">Sin certificados generados</h2>
+        <div class="rule"></div>
+        <div id="dSummary" class="lede">Generá un lote en la pestaña Masivo. Los archivos quedan disponibles acá mientras esta página siga abierta.</div>
+        <div id="dActions" hidden>
+          <div class="dlrow"><div class="meta"><b>ZIP organizado por empresa</b><span id="zipName1"></span></div><button class="btn primary" id="zipByCo" type="button">Descargar todos · ZIP</button></div>
+          <div class="dlrow"><div class="meta"><b>ZIP en una sola carpeta</b><span id="zipName2"></span></div><button class="btn" id="zipFlat" type="button">Descargar ZIP sin carpetas</button></div>
+          <div class="dlrow"><div class="meta"><b>Registro de emisión</b><span>Registro de Emisión - CLEAN SEA Academy.xlsx (también incluido en cada ZIP)</span></div><button class="btn" id="regBtn" type="button">Descargar registro Excel</button></div>
+        </div>
+        <div id="dlMsg"></div>
+      </div>
+      <div class="card c5">
+        <p class="eyebrow">Certificados individuales</p>
+        <h2>Emitidos en esta sesión</h2>
+        <div class="rule"></div>
+        <div id="indList" class="muted">Ninguno todavía.</div>
+        <div class="btns" style="margin-top:12px"><button class="btn" id="indReg" type="button" disabled>Registro de individuales</button></div>
+      </div>
+      <div class="card c12" id="filesCard" hidden>
+        <div class="toolbar" style="justify-content:space-between"><h3>Archivos del lote</h3><input type="search" id="fq" placeholder="Buscar archivo" aria-label="Buscar archivo"></div>
+        <div class="files" id="files"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · REGISTRO (base de datos) -->
+  <section class="panel" id="p-reg" role="tabpanel" aria-labelledby="t-reg" hidden>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div><p class="eyebrow">Base de datos de emisiones</p><h2>Registro de certificados emitidos</h2></div>
+        <p class="muted" id="regState" style="margin:0;font-size:12.5px"></p>
+      </div>
+      <div class="rule"></div>
+      <p class="lede">Cada lote y cada certificado individual se guarda acá al generarse, con curso, fecha, empresa, participante, archivo y quién lo emitió. Lo ven todas las personas con acceso a este generador. Desde acá podés volver a descargar cualquier certificado: se regenera con la misma plantilla y los mismos datos.</p>
+      <div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+        <div class="kpi ok"><div class="v" id="rCert">0</div><div class="l">Certificados emitidos</div></div>
+        <div class="kpi"><div class="v" id="rLotes">0</div><div class="l">Lotes e individuales</div></div>
+        <div class="kpi"><div class="v" id="rCursos">0</div><div class="l">Cursos</div></div>
+        <div class="kpi"><div class="v" id="rEmp">0</div><div class="l">Empresas</div></div>
+      </div>
+      <div class="toolbar">
+        <label class="sr" for="rq">Buscar en el registro</label>
+        <input type="search" id="rq" placeholder="Buscar nombre, empresa o curso">
+        <label class="sr" for="rCurso">Filtrar por curso</label>
+        <select id="rCurso"><option value="">Todos los cursos</option></select>
+        <label class="sr" for="rEmpF">Filtrar por empresa</label>
+        <select id="rEmpF"><option value="">Todas las empresas</option></select>
+        <label class="sr" for="rAnio">Filtrar por año</label>
+        <select id="rAnio"><option value="">Todos los años</option></select>
+        <label class="sr" for="rVista">Vista</label>
+        <select id="rVista"><option value="cert">Ver certificados</option><option value="lote">Ver lotes</option></select>
+        <span style="flex:1"></span>
+        <button class="btn" id="rExport" type="button">Exportar a Excel</button>
+      </div>
+      <div class="toolbar" style="margin-top:-2px">
+        <span class="muted" style="font-size:12.5px">Respaldo de la base:</span>
+        <button class="btn ghost" id="rBackup" type="button">Descargar respaldo completo (JSON)</button>
+        <span class="btn ghost filebtn" id="rRestoreWrap" hidden>Restaurar desde respaldo<input type="file" id="rRestore" accept=".json,application/json" aria-label="Restaurar desde respaldo"></span>
+        <span style="flex:1"></span>
+        <span class="muted mono" style="font-size:11px" id="rVer"></span>
+      </div>
+      <div class="tablebox" id="rBox"></div>
+      <div id="rMsg"></div>
+    </div>
+  </section>
+
+  <details class="help" id="help">
+    <summary>Cómo usar el generador</summary>
+    <ol>
+      <li><b>Cursos:</b> creá el curso antes de dictarlo y proyectá el QR. Los participantes se anotan desde el celular y aparecen en la tabla en el momento. Al terminar, cerrá la inscripción y enviá los diplomas por mail (o pasalos a Masivo para bajar el ZIP).</li>
+      <li><b>Masivo:</b> completá el título y la fecha del curso. Importá el Excel con las columnas EMPRESA y NOMBRE Y APELLIDO (descargá la plantilla si no la tenés) o agregá participantes a mano.</li>
+      <li>Revisá la tabla. Los registros en rojo no se pueden emitir hasta corregirlos. Los posibles duplicados se marcan en amarillo y no se borran solos.</li>
+      <li>En <b>Vista previa</b> recorré los certificados. Lo que ves es el PDF que se descarga.</li>
+      <li>Presioná <b>Generar certificados</b>. Si seleccionaste filas, se emiten sólo esas; si no, todas.</li>
+      <li>En <b>Descargas</b> bajá el ZIP (por empresa o en una sola carpeta) y el registro de emisión en Excel.</li>
+      <li><b>Individual:</b> para un único certificado, completá el formulario, generá y descargá.</li>
+      <li><b>Registro:</b> todo lo que se genera queda guardado en la base de datos. Buscá por persona, empresa o curso, exportá a Excel o volvé a descargar un certificado ya emitido.</li>
+    </ol>
+    <p class="muted" style="margin:6px 0 0;font-size:12.5px">Los PDF se arman en este navegador. En la base de Integra se guardan los cursos, los inscriptos por QR y el registro de emisiones. La lista de trabajo de la pestaña Masivo se pierde al cerrar la página: guardá el Excel de origen.</p>
+  </details>
+</main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mdTitle">
+  <div class="box">
+    <h2 id="mdTitle"></h2>
+    <div id="mdBody"></div>
+    <div class="btns" style="justify-content:flex-end;margin-top:18px" id="mdBtns"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<div class="qrfull" id="qrFull" hidden role="dialog" aria-modal="true" aria-labelledby="qrTitulo">
+  <button class="btn" id="qrCerrar" type="button">Cerrar ✕</button>
+  <img src="/assets/logo.png" alt="" class="qrlogo">
+  <p class="qrkick">Escaneá para registrar tu asistencia y recibir tu certificado</p>
+  <h1 id="qrTitulo"></h1>
+  <p id="qrSub"></p>
+  <canvas id="qrBig"></canvas>
+  <p class="mono" id="qrLink"></p>
+</div>
+
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

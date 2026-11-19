@@ -1,0 +1,33 @@
+:root{
+  --navy:#1B3765; --green:#009460; --bg:#F4F6F9; --surface:#fff; --line:#E1E6EC; --line-strong:#C8CED6;
+  --fg:#0E1C2B; --fg-2:#55606E; --ok-bg:#E3F4EC; --ok-fg:#00704A; --warn-bg:#FFF2DB; --warn-fg:#8A5300; --err-bg:#FDE9E1; --err-fg:#B33F0E;
+  --f-display:'Archivo','Arial Narrow',Arial,sans-serif; --f-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 var(--f-body)}
+.wrap{max-width:520px;margin:0 auto;padding:20px 16px 40px}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.brand .name{margin:0;font:800 20px/1.1 var(--f-display);color:var(--navy);letter-spacing:.02em}
+.brand .name span{color:var(--green)}
+.brand .sub{margin:2px 0 0;color:var(--fg-2);font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px}
+.eyebrow{margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--green)}
+h1{margin:0;font:600 21px/1.25 var(--f-display);color:var(--navy)}
+.muted{color:var(--fg-2)}
+.cmeta{margin:6px 0 18px}
+form{display:grid;gap:14px}
+label{display:grid;gap:6px;font-weight:600;font-size:14px}
+input{font:inherit;font-weight:400;font-size:16px;padding:12px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--fg);width:100%}
+input:focus{outline:2px solid var(--navy);outline-offset:1px;border-color:var(--navy)}
+input[aria-invalid=true]{border-color:var(--err-fg)}
+small{font-weight:400;color:var(--fg-2);font-size:13px}
+.legal{margin:0;font-size:12.5px;color:var(--fg-2)}
+button{font:600 16px var(--f-body);padding:14px;border:0;border-radius:8px;background:var(--navy);color:#fff;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+.msg{padding:10px 12px;border-radius:8px;font-size:14px}
+.msg.err{background:var(--err-bg);color:var(--err-fg)}
+.msg.warn{background:var(--warn-bg);color:var(--warn-fg);margin-top:12px}
+.ok-mark{width:56px;height:56px;border-radius:50%;background:var(--ok-bg);color:var(--ok-fg);display:grid;place-items:center;font-size:30px;margin-bottom:12px}
+#listo p{margin:10px 0 0}
+[hidden]{display:none!important}
