@@ -26,7 +26,7 @@ npm run dev
 
 ## Configuración del mail (Supabase → Edge Functions → Secrets)
 
-- `RESEND_API_KEY`
+- `ACADEMY_RESEND_API_KEY` (no `RESEND_API_KEY`: ese nombre ya lo usa Reparaciones en el mismo Supabase)
 - `ACADEMY_MAIL_FROM`, por ejemplo `CLEAN SEA Academy <academy@cleansea.com.ar>`. El dominio tiene que estar verificado en Resend.
 - `ACADEMY_MAIL_REPLY_TO` (opcional)
 

@@ -1,7 +1,7 @@
 // CLEAN SEA Academy — envía por mail el certificado de un inscripto.
 // El PDF se arma en el navegador (misma plantilla que el generador) y llega acá en base64.
 // El destinatario se toma de la base, no del cliente: solo quien ve la inscripción (RLS academy_puede) puede enviar.
-// Secretos: RESEND_API_KEY, ACADEMY_MAIL_FROM (ej. "CLEAN SEA Academy <academy@cleansea.com.ar>"),
+// Secretos: ACADEMY_RESEND_API_KEY (no usar RESEND_API_KEY: es de Reparaciones), ACADEMY_MAIL_FROM (ej. "CLEAN SEA Academy <academy@cleansea.com.ar>"),
 //           ACADEMY_MAIL_REPLY_TO (opcional).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -41,9 +41,9 @@ Deno.serve(async (req) => {
   if (error) return json(500, { error: error.message });
   if (!ins) return json(403, { error: "Sin acceso a esta inscripción" });
 
-  const key = Deno.env.get("RESEND_API_KEY");
+  const key = Deno.env.get("ACADEMY_RESEND_API_KEY");
   const from = Deno.env.get("ACADEMY_MAIL_FROM");
-  if (!key || !from) return json(503, { error: "El envío de mails no está configurado todavía (faltan RESEND_API_KEY y ACADEMY_MAIL_FROM)." });
+  if (!key || !from) return json(503, { error: "El envío de mails no está configurado todavía (faltan ACADEMY_RESEND_API_KEY y ACADEMY_MAIL_FROM)." });
 
   // deno-lint-ignore no-explicit-any
   const curso = (ins as any).curso as { titulo: string; fecha: string; lugar: string | null };
