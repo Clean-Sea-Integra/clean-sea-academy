@@ -39,16 +39,23 @@
       <label>Nombre y apellido
         <input id="fNombre" autocomplete="name" required maxlength="120" placeholder="Como querés que figure en el certificado">
         <small id="fNombreVista"></small></label>
-      <label>DNI o pasaporte
-        <input id="fDni" autocomplete="off" required maxlength="24" placeholder="Sin puntos"></label>
+      <label>Mail
+        <input id="fEmail" type="email" inputmode="email" autocomplete="email" required maxlength="200" placeholder="Ahí te llega el certificado"></label>
       <label>Empresa
         <input id="fEmpresa" autocomplete="organization" required maxlength="120"></label>
-      <label>Cargo / puesto
-        <input id="fCargo" autocomplete="organization-title" required maxlength="120"></label>
-      <label>Email
-        <input id="fEmail" type="email" inputmode="email" autocomplete="email" required maxlength="200" placeholder="Ahí te llega el certificado"></label>
-      <label>Teléfono / WhatsApp
-        <input id="fTel" type="tel" inputmode="tel" autocomplete="tel" required maxlength="40" placeholder="Ej.: +54 9 11 5555-5555"></label>
+      <label>Área
+        <input id="fArea" autocomplete="off" required maxlength="120" placeholder="Ej.: Mantenimiento, Producción, HSE"></label>
+      <label>Tipo de puesto
+        <select id="fPuesto" required>
+          <option value="">Elegí una opción</option>
+          <option>Director/Gerente</option>
+          <option>Jefe</option>
+          <option>Supervisor</option>
+          <option>Coordinador</option>
+          <option>Analista/Administrativo</option>
+          <option>Operador</option>
+          <option>Otro</option>
+        </select></label>
       <p class="legal">Tus datos los usa CLEAN SEA S.A. para emitir tu certificado y para contactarte sobre capacitaciones y servicios. Podés pedir que los corrijamos o eliminemos escribiéndonos.</p>
       <div id="fMsg"></div>
       <button type="submit" id="fBtn">Registrar asistencia</button>
@@ -59,7 +66,7 @@
     <div class="ok-mark" aria-hidden="true">✓</div>
     <h1 id="lTitulo">¡Listo!</h1>
     <p id="lTexto"></p>
-    <p class="muted" style="font-size:13px">Si te equivocaste en algún dato, volvé a escanear el QR y cargalo de nuevo con el mismo DNI: se actualiza.</p>
+    <p class="muted" style="font-size:13px">Si te equivocaste en algún dato, volvé a escanear el QR y cargalo de nuevo con el mismo mail: se actualiza.</p>
   </section>
 </main>
 <script type="module" src="/src/inscripcion.js"></script>

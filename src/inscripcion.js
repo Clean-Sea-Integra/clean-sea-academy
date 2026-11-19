@@ -34,8 +34,8 @@ async function iniciar() {
   try {
     const d = JSON.parse(localStorage.getItem(GUARDADO) || "null");
     if (d) {
-      $("fNombre").value = d.nombre || ""; $("fDni").value = d.dni || ""; $("fEmpresa").value = d.empresa || "";
-      $("fCargo").value = d.cargo || ""; $("fEmail").value = d.email || ""; $("fTel").value = d.telefono || "";
+      $("fNombre").value = d.nombre || ""; $("fEmail").value = d.email || ""; $("fEmpresa").value = d.empresa || "";
+      $("fArea").value = d.area || ""; $("fPuesto").value = d.puesto || "";
     }
   } catch { /* sin almacenamiento local */ }
   vistaNombre();
@@ -51,22 +51,21 @@ $("fNombre").addEventListener("input", vistaNombre);
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const v = {
-    nombre: nombrePropio($("fNombre").value), dni: $("fDni").value.trim(), empresa: $("fEmpresa").value.replace(/\s+/g, " ").trim(),
-    cargo: $("fCargo").value.replace(/\s+/g, " ").trim(), email: $("fEmail").value.trim().toLowerCase(), telefono: $("fTel").value.trim(),
+    nombre: nombrePropio($("fNombre").value), email: $("fEmail").value.trim().toLowerCase(),
+    empresa: $("fEmpresa").value.replace(/\s+/g, " ").trim(), area: $("fArea").value.replace(/\s+/g, " ").trim(), puesto: $("fPuesto").value,
   };
   const faltan = [];
   const marcar = (id, mal) => { $(id).setAttribute("aria-invalid", mal ? "true" : "false"); return mal; };
   if (marcar("fNombre", v.nombre.length < 3 || v.nombre.split(" ").length < 2)) faltan.push("nombre y apellido");
-  if (marcar("fDni", !/^[A-Za-z0-9]{5,20}$/.test(v.dni.replace(/[^A-Za-z0-9]/g, "")))) faltan.push("DNI o pasaporte");
+  if (marcar("fEmail", !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email))) faltan.push("mail");
   if (marcar("fEmpresa", !v.empresa)) faltan.push("empresa");
-  if (marcar("fCargo", !v.cargo)) faltan.push("cargo");
-  if (marcar("fEmail", !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email))) faltan.push("email");
-  if (marcar("fTel", !/^[0-9+()\-\s.]{6,40}$/.test(v.telefono))) faltan.push("teléfono");
+  if (marcar("fArea", !v.area)) faltan.push("área");
+  if (marcar("fPuesto", !v.puesto)) faltan.push("tipo de puesto");
   if (faltan.length) { $("fMsg").innerHTML = `<div class="msg err">Revisá: ${faltan.join(", ")}.</div>`; return; }
 
   $("fBtn").disabled = true; $("fMsg").innerHTML = "";
   const { data, error } = await sb.rpc("academy_inscribir", {
-    p_token: token, p_nombre: v.nombre, p_empresa: v.empresa, p_dni: v.dni, p_email: v.email, p_telefono: v.telefono, p_cargo: v.cargo,
+    p_token: token, p_nombre: v.nombre, p_email: v.email, p_empresa: v.empresa, p_area: v.area, p_puesto: v.puesto,
   });
   $("fBtn").disabled = false;
   if (error) {

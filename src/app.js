@@ -739,10 +739,10 @@ function renderCursoDetalle(){
     return '<tr data-i="' + x.id + '"' + (cur.sel.has(x.id) ? ' class="sel"' : "") + '><td class="chk"><input type="checkbox" data-csel' + (cur.sel.has(x.id) ? " checked" : "") + ' aria-label="Seleccionar ' + esc(x.nombre) + '"></td>' +
       '<td class="num">' + (i + 1) + "</td>" +
       '<td><input type="text" data-cf="nombre" value="' + esc(x.nombre) + '" aria-label="Nombre"></td>' +
+      '<td><input type="email" data-cf="email" value="' + esc(x.email) + '" aria-label="Mail"></td>' +
       '<td><input type="text" data-cf="empresa" value="' + esc(x.empresa) + '" aria-label="Empresa"></td>' +
-      '<td class="mono" style="font-size:12px">' + esc(x.dni) + "</td>" +
-      '<td><input type="email" data-cf="email" value="' + esc(x.email) + '" aria-label="Email"></td>' +
-      '<td style="font-size:12.5px">' + esc(x.telefono || "") + (x.cargo ? '<div class="muted">' + esc(x.cargo) + "</div>" : "") + "</td>" +
+      '<td><input type="text" data-cf="area" value="' + esc(x.area || "") + '" aria-label="Área"></td>' +
+      '<td style="font-size:12.5px;white-space:nowrap">' + esc(x.puesto || "") + "</td>" +
       '<td class="st">' + pills + "</td>" +
       '<td class="act"><button class="btn ghost" type="button" data-cver>Ver</button><button class="btn ghost" type="button" data-cenv>Enviar</button><button class="btn ghost danger" type="button" data-cdel>Quitar</button></td></tr>';
   }).join("");
@@ -820,11 +820,11 @@ $("cdMasivo").addEventListener("click", async function(){
 
 $("cdExcel").addEventListener("click", function(){
   var c = cursoSel(); if (!c) return;
-  var aoa = [["N.º","Nombre y apellido","Empresa","DNI / Pasaporte","Email","Teléfono","Cargo","Inscripto","Diploma enviado"]];
-  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.empresa, x.dni, x.email, x.telefono || "", x.cargo || "", fmtFH(x.created_at), fmtFH(x.diploma_enviado_at)]); });
+  var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Área","Tipo de puesto","Inscripto","Diploma enviado"]];
+  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", fmtFH(x.created_at), fmtFH(x.diploma_enviado_at)]); });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 24 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 24 }, { wch: 17 }, { wch: 17 }];
-  ws["!autofilter"] = { ref: "A1:I" + aoa.length };
+  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 17 }, { wch: 17 }];
+  ws["!autofilter"] = { ref: "A1:H" + aoa.length };
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inscriptos");
   save("Inscriptos - " + C.shortCourse(c.titulo, 50) + " - " + isoToAr(c.fecha).replace(/\//g, "-") + ".xlsx", new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
 });
