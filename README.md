@@ -2,7 +2,7 @@
 
 Módulo de Integra Clean Sea para cursos y certificados de asistencia.
 
-- **Cursos:** se crea el curso y se proyecta un QR. Los participantes lo escanean y completan nombre, DNI, empresa, cargo, email y teléfono. La lista aparece en vivo.
+- **Cursos:** se crea el curso (título y fecha) y los inscriptos llegan por el QR propio, por "Importar respuestas de Forms" (planilla maestra, filtra por la fecha del curso) o por "Pegar desde Excel" (filas copiadas con la fila de títulos). Campos: nombre y apellido, mail, empresa, área y tipo de puesto.
 - **Diplomas por mail:** al terminar, se envía a cada inscripto su certificado en PDF. Lo manda la Edge Function `academy-enviar-diploma` a través de Resend.
 - **Generador:** Individual, Masivo (Excel/CSV → ZIP por empresa), Vista previa, Descargas y Registro. Es el mismo generador que el artefacto original, con la misma plantilla y las mismas tipografías (`public/assets`).
 

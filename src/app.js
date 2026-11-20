@@ -737,6 +737,7 @@ function renderCursoDetalle(){
     var st = cur.status[x.id], pills = st ? statusHtml(st) : "";
     if (x.diploma_enviado_at) pills = '<span class="pill ok">Diploma enviado ' + esc(fmtFH(x.diploma_enviado_at)) + "</span>" + (st && st.errs.length ? pills : "");
     if (x.origen === "forms") pills += '<span class="pill" title="Importado de Microsoft Forms">Forms</span>';
+    else if (x.origen === "manual") pills += '<span class="pill" title="Pegado desde Excel">Excel</span>';
     return '<tr data-i="' + x.id + '"' + (cur.sel.has(x.id) ? ' class="sel"' : "") + '><td class="chk"><input type="checkbox" data-csel' + (cur.sel.has(x.id) ? " checked" : "") + ' aria-label="Seleccionar ' + esc(x.nombre) + '"></td>' +
       '<td class="num">' + (i + 1) + "</td>" +
       '<td><input type="text" data-cf="nombre" value="' + esc(x.nombre) + '" aria-label="Nombre"></td>' +
@@ -919,38 +920,103 @@ $("cdForms").addEventListener("change", async function(e){
       msg("cdMsg", "warn", "La planilla no tiene respuestas del " + esc(isoToAr(c.fecha)) + ", la fecha del curso." + (fechas.length ? " Fechas con respuestas: " + esc(fechas.join(", ")) + "." : ""));
       return;
     }
-    var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); })), vistos = new Set();
-    var nuevos = [], repetidos = 0, invalidos = [];
-    delDia.forEach(function(x){
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3){ invalidos.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : "")); return; }
-      if (ya.has(x.email) || vistos.has(x.email)){ repetidos++; return; }
-      vistos.add(x.email); nuevos.push(x);
-    });
-    var sinEmpresa = nuevos.filter(function(x){ return !x.empresa; }).length;
-    var ok = await modal("Importar respuestas de Forms",
-      "<p><b>Curso:</b> " + esc(c.titulo) + "<br><b>Fecha:</b> " + esc(isoToAr(c.fecha)) + "</p>" +
-      "<p>La planilla tiene " + p.filas.length + " respuestas; <b>" + delDia.length + "</b> son de esta fecha.</p>" +
-      "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + nuevos.length + "</b> se agregan como inscriptos</li>" +
-      (repetidos ? "<li>" + repetidos + " ya estaban (mismo mail): no se tocan</li>" : "") +
-      (invalidos.length ? "<li>" + invalidos.length + " sin mail o nombre válido: se omiten (" + esc(invalidos.slice(0, 5).join(", ")) + (invalidos.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" +
-      (p.col.empresa < 0 ? '<div class="msg warn">La planilla no tiene columna de empresa: quedan como «Sin empresa» y se pueden corregir en la tabla. Conviene agregar la pregunta Empresa al Forms.</div>' :
-        sinEmpresa ? '<div class="msg warn">' + sinEmpresa + " respuestas no tienen empresa: quedan como «Sin empresa».</div>" : "") +
-      (p.col.puesto < 0 ? '<div class="msg warn">No hay columna de puesto: quedan como «Otro».</div>' : ""),
-      [{ label: "Cancelar", value: false }, { label: "Importar " + nuevos.length, value: true, primary: true }]);
-    if (!ok || !nuevos.length){ msg("cdMsg", "", ""); return; }
-    var filas = nuevos.map(function(x){ return { curso_id: c.id, nombre: nombrePropio(x.nombre).slice(0, 120), email: x.email.slice(0, 200),
-      empresa: (x.empresa || "Sin empresa").slice(0, 120), area: x.area ? x.area.slice(0, 120) : null, puesto: x.puesto, origen: "forms", respondido_at: x.hora }; });
-    var r = await sb.from("academy_inscripciones").insert(filas);
-    if (r.error){ msg("cdMsg", "err", "No se pudo importar: " + esc(r.error.message)); return; }
-    msg("cdMsg", "ok", nuevos.length + " inscriptos importados desde «" + esc(f.name) + "». Revisá nombres y empresas antes de enviar los diplomas.");
-    cargarInscriptos();
+    await confirmarEImportar(c, delDia, { titulo: "Importar respuestas de Forms", origen: "forms", fuente: "«" + f.name + "»",
+      intro: "La planilla tiene " + p.filas.length + " respuestas; <b>" + delDia.length + "</b> son de esta fecha.",
+      sinColEmpresa: p.col.empresa < 0 ? "La planilla no tiene columna de empresa: quedan como «Sin empresa» y se pueden corregir en la tabla. Conviene agregar la pregunta Empresa al Forms." : "",
+      sinColPuesto: p.col.puesto < 0 });
+  } catch(err){ msg("cdMsg", "err", esc(err.message)); }
+});
+
+// Resumen + confirmación + alta (Forms y Pegar desde Excel). lista: [{fila, nombre, email, empresa, area, puesto, puestoTexto, hora?}]
+async function confirmarEImportar(c, lista, o){
+  var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); })), vistos = new Set();
+  var nuevos = [], repetidos = 0, invalidos = [];
+  lista.forEach(function(x){
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3){ invalidos.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : "")); return; }
+    if (ya.has(x.email) || vistos.has(x.email)){ repetidos++; return; }
+    vistos.add(x.email); nuevos.push(x);
+  });
+  var sinEmpresa = nuevos.filter(function(x){ return !x.empresa; }).length;
+  var vista = nuevos.length ? '<div class="tablebox" style="max-height:220px;margin:0 0 10px"><table style="min-width:0;font-size:12.5px"><thead><tr><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Puesto</th></tr></thead><tbody>' +
+    nuevos.map(function(x){ return "<tr><td>" + esc(nombrePropio(x.nombre)) + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa || "Sin empresa") + "</td><td>" + esc(x.puesto) +
+      (x.puestoTexto && normKey(x.puestoTexto) !== normKey(x.puesto) ? ' <span class="muted">(' + esc(x.puestoTexto) + ")</span>" : "") + "</td></tr>"; }).join("") +
+    "</tbody></table></div>" : "";
+  var ok = await modal(o.titulo,
+    "<p><b>Curso:</b> " + esc(c.titulo) + "<br><b>Fecha:</b> " + esc(isoToAr(c.fecha)) + "</p>" +
+    "<p>" + o.intro + "</p>" +
+    "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + nuevos.length + "</b> se agregan como inscriptos</li>" +
+    (repetidos ? "<li>" + repetidos + " ya estaban (mismo mail): no se tocan</li>" : "") +
+    (invalidos.length ? "<li>" + invalidos.length + " sin mail o nombre válido: se omiten (" + esc(invalidos.slice(0, 5).join(", ")) + (invalidos.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" + vista +
+    (o.sinColEmpresa ? '<div class="msg warn">' + o.sinColEmpresa + "</div>" :
+      sinEmpresa ? '<div class="msg warn">' + sinEmpresa + " sin empresa: quedan como «Sin empresa».</div>" : "") +
+    (o.sinColPuesto ? '<div class="msg warn">No hay columna de puesto: quedan como «Otro».</div>' : ""),
+    [{ label: "Cancelar", value: false }, { label: "Importar " + nuevos.length, value: true, primary: true }]);
+  if (!ok || !nuevos.length){ msg("cdMsg", "", ""); return; }
+  var filas = nuevos.map(function(x){ return { curso_id: c.id, nombre: nombrePropio(x.nombre).slice(0, 120), email: x.email.slice(0, 200),
+    empresa: (x.empresa || "Sin empresa").slice(0, 120), area: x.area ? x.area.slice(0, 120) : null, puesto: x.puesto, origen: o.origen, respondido_at: x.hora || null }; });
+  var r = await sb.from("academy_inscripciones").insert(filas);
+  if (r.error){ msg("cdMsg", "err", "No se pudo importar: " + esc(r.error.message)); return; }
+  msg("cdMsg", "ok", nuevos.length + " inscriptos importados desde " + esc(o.fuente) + ". Revisá nombres y empresas antes de enviar los diplomas.");
+  cargarInscriptos();
+}
+
+/* ── Pegar desde Excel: se copian las filas del curso (con la fila de títulos) y se pegan acá ── */
+// Texto copiado de Excel = filas por salto de línea, celdas por tabulador; una celda con saltos viene entre comillas.
+function parseTsv(t){
+  var rows = [], row = [], cell = "", q = false;
+  t = t.replace(/\r\n?/g, "\n");
+  for (var i = 0; i < t.length; i++){
+    var ch = t[i];
+    if (q){ if (ch === '"'){ if (t[i + 1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"' && cell === "") q = true;
+    else if (ch === "\t"){ row.push(cell); cell = ""; }
+    else if (ch === "\n"){ row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += ch;
+  }
+  if (cell !== "" || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(function(r){ return r.some(function(x){ return C.clean(x); }); });
+}
+// Sin fila de títulos se asume el orden de la planilla: Nombre y Apellido | Empresa | Cargo | Área | Mail.
+function leerPegado(texto){
+  var aoa = parseTsv(texto);
+  if (!aoa.length) throw new Error("No hay nada pegado.");
+  var col = columnasForms(aoa[0]);
+  var conTitulos = col.email >= 0 && (col.nombre >= 0 || col.nombreCompleto >= 0) && !aoa[0].some(function(x){ return /@/.test(x); });
+  if (!conTitulos){
+    var mail = aoa[0].findIndex(function(x){ return /@/.test(x); });
+    col = { nombreCompleto: 0, nombre: -1, apellido: -1, empresa: 1, puesto: 2, area: 3, email: mail >= 0 ? mail : 4 };
+  }
+  var filas = [];
+  aoa.slice(conTitulos ? 1 : 0).forEach(function(row, k){
+    var get = function(i){ return i >= 0 ? C.clean(row[i]) : ""; };
+    var nombre = col.nombreCompleto >= 0 ? get(col.nombreCompleto) : C.clean(get(col.nombre) + " " + get(col.apellido));
+    var email = get(col.email).toLowerCase();
+    if (!nombre && !email) return;
+    filas.push({ fila: k + 1, nombre: nombre, email: email, empresa: get(col.empresa), area: get(col.area), puestoTexto: get(col.puesto), puesto: puestoDeTexto(get(col.puesto)) });
+  });
+  return { filas: filas, col: col, conTitulos: conTitulos };
+}
+$("cdPegar").addEventListener("click", async function(){
+  var c = cursoSel(); if (!c) return;
+  var ok = await modal("Pegar desde Excel",
+    "<p>En la planilla seleccioná las filas de este curso <b>junto con la fila de títulos</b> (Nombre y Apellido, Empresa, Cargo, Área, Mail), copiá con Ctrl+C y pegá acá con Ctrl+V.</p>" +
+    '<textarea id="pgTxt" rows="8" style="width:100%;font:12px ui-monospace,Consolas,monospace;white-space:pre;resize:vertical" placeholder="Pegá acá (Ctrl+V)" aria-label="Filas copiadas de Excel"></textarea>',
+    [{ label: "Cancelar", value: false }, { label: "Revisar", value: true, primary: true }]);
+  var texto = $("pgTxt") ? $("pgTxt").value : "";
+  if (!ok) return;
+  try {
+    var p = leerPegado(texto);
+    if (!p.filas.length){ msg("cdMsg", "warn", "No encontré personas en lo que pegaste."); return; }
+    await confirmarEImportar(c, p.filas, { titulo: "Pegar desde Excel", origen: "manual", fuente: "Excel",
+      intro: "Pegaste <b>" + p.filas.length + "</b> " + (p.filas.length === 1 ? "persona" : "personas") + (p.conTitulos ? "." : ". No vino la fila de títulos: usé el orden Nombre y Apellido, Empresa, Cargo, Área, Mail."),
+      sinColEmpresa: p.col.empresa < 0 ? "No vino la columna Empresa: quedan como «Sin empresa»." : "", sinColPuesto: p.col.puesto < 0 });
   } catch(err){ msg("cdMsg", "err", esc(err.message)); }
 });
 
 $("cdExcel").addEventListener("click", function(){
   var c = cursoSel(); if (!c) return;
   var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Área","Tipo de puesto","Origen","Inscripto","Diploma enviado"]];
-  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", x.origen === "forms" ? "Forms" : "QR", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
+  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", x.origen === "forms" ? "Forms" : x.origen === "manual" ? "Excel" : "QR", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 8 }, { wch: 17 }, { wch: 17 }];
   ws["!autofilter"] = { ref: "A1:I" + aoa.length };
