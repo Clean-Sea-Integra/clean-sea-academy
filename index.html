@@ -47,11 +47,12 @@
 <main class="wrap">
   <nav class="tabs" role="tablist" aria-label="Secciones">
     <button role="tab" id="t-cur" aria-controls="p-cur" aria-selected="true"><span class="n">0</span>Cursos <span class="badge" id="tabCur">0</span></button>
-    <button role="tab" id="t-ind" aria-controls="p-ind" aria-selected="false"><span class="n">1</span>Individual</button>
-    <button role="tab" id="t-mas" aria-controls="p-mas" aria-selected="false"><span class="n">2</span>Masivo <span class="badge" id="tabCount">0</span></button>
-    <button role="tab" id="t-pre" aria-controls="p-pre" aria-selected="false"><span class="n">3</span>Vista previa</button>
-    <button role="tab" id="t-des" aria-controls="p-des" aria-selected="false"><span class="n">4</span>Descargas <span class="badge" id="tabFiles">0</span></button>
-    <button role="tab" id="t-reg" aria-controls="p-reg" aria-selected="false"><span class="n">5</span>Registro <span class="badge" id="tabReg">0</span></button>
+    <button role="tab" id="t-per" aria-controls="p-per" aria-selected="false"><span class="n">1</span>Personas <span class="badge" id="tabPer">0</span></button>
+    <button role="tab" id="t-ind" aria-controls="p-ind" aria-selected="false"><span class="n">2</span>Individual</button>
+    <button role="tab" id="t-mas" aria-controls="p-mas" aria-selected="false"><span class="n">3</span>Masivo <span class="badge" id="tabCount">0</span></button>
+    <button role="tab" id="t-pre" aria-controls="p-pre" aria-selected="false"><span class="n">4</span>Vista previa</button>
+    <button role="tab" id="t-des" aria-controls="p-des" aria-selected="false"><span class="n">5</span>Descargas <span class="badge" id="tabFiles">0</span></button>
+    <button role="tab" id="t-reg" aria-controls="p-reg" aria-selected="false"><span class="n">6</span>Registro <span class="badge" id="tabReg">0</span></button>
   </nav>
 
   <!-- 0 · CURSOS (inscripción por QR) -->
@@ -68,7 +69,7 @@
           <label class="f" for="cFecha"><span>Fecha <span class="req">obligatorio</span></span><input type="date" id="cFecha"></label>
           <label class="f" for="cLugar"><span>Lugar</span><input type="text" id="cLugar" autocomplete="off" placeholder="Ej.: Base Dock Sud"></label>
           <label class="f full" for="cInstructor"><span>Instructor</span><input type="text" id="cInstructor" autocomplete="off"></label>
-          <div class="btns full"><button type="submit" class="btn primary">Crear curso y QR</button></div>
+          <div class="btns full"><button type="submit" class="btn primary">Crear curso</button></div>
         </form>
         <div id="cMsg"></div>
       </div>
@@ -86,15 +87,7 @@
             <h2 id="cdTitulo"></h2>
             <p class="muted" id="cdMeta" style="margin:4px 0 8px"></p>
             <div id="cdEstado"></div>
-            <p style="margin:12px 0 4px;font-size:13px">Link de inscripción: <a id="cdLink" target="_blank" rel="noopener" class="mono" style="font-size:12px;word-break:break-all"></a></p>
-            <div class="btns" style="margin-top:10px">
-              <button class="btn primary" id="cdProyectar" type="button">Proyectar QR</button>
-              <button class="btn" id="cdQrPng" type="button">Descargar QR (PNG)</button>
-              <button class="btn" id="cdCopiar" type="button">Copiar link</button>
-              <button class="btn" id="cdAbrir" type="button">Cerrar inscripción</button>
-            </div>
           </div>
-          <canvas id="cdQr" width="220" height="220" aria-label="Código QR de inscripción"></canvas>
         </div>
         <div class="kpis">
           <div class="kpi"><div class="v" id="ckTotal">0</div><div class="l">Inscriptos</div></div>
@@ -104,18 +97,17 @@
           <div class="kpi"><div class="v" id="ckSel">0</div><div class="l">Seleccionados</div></div>
         </div>
         <div class="toolbar">
+          <button class="btn primary" id="cdAgregar" type="button">Elegir participantes de la base</button>
           <button class="btn primary" id="cdEnviar" type="button">Enviar diplomas por mail</button>
           <button class="btn" id="cdMasivo" type="button">Cargar en Masivo (ZIP)</button>
-          <button class="btn" id="cdPegar" type="button">Pegar desde Excel</button>
-          <span class="btn filebtn">Importar respuestas de Forms<input type="file" id="cdForms" accept=".xlsx,.xls,.csv" aria-label="Importar respuestas de Microsoft Forms"></span>
           <button class="btn" id="cdExcel" type="button">Exportar inscriptos</button>
           <span style="flex:1"></span>
           <button class="btn ghost danger" id="cdBorrar" type="button">Eliminar curso</button>
         </div>
-        <p class="muted" style="margin:0 0 8px;font-size:12.5px">«Enviar diplomas» manda a los seleccionados, o si no hay selección, a todos los que todavía no lo recibieron. Nombre, empresa y email se pueden corregir en la tabla.</p>
+        <p class="muted" style="margin:0 0 8px;font-size:12.5px">«Elegir participantes» trae de la base a quienes se registraron con el QR (por defecto, los de la fecha del curso). «Enviar diplomas» manda a los seleccionados, o si no hay selección, a todos los que todavía no lo recibieron. Nombre, empresa y email se pueden corregir en la tabla.</p>
         <div class="tablebox">
           <table>
-            <thead><tr><th class="chk"><input type="checkbox" id="cdSelAll" aria-label="Seleccionar todos"></th><th>N.º</th><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Área</th><th>Tipo de puesto</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th class="chk"><input type="checkbox" id="cdSelAll" aria-label="Seleccionar todos"></th><th>N.º</th><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Área</th><th>Cargo</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody id="cdBody"></tbody>
           </table>
         </div>
@@ -124,6 +116,67 @@
           <div class="paper"><canvas id="cdCanvas" width="1684" height="1192" aria-label="Vista previa del diploma"></canvas></div>
           <div class="cap" id="cdPrevCap"></div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1 · PERSONAS (QR fijo + base maestra) -->
+  <section class="panel" id="p-per" role="tabpanel" aria-labelledby="t-per" hidden>
+    <div class="grid">
+      <div class="card c7">
+        <p class="eyebrow">Registro de asistencia</p>
+        <h2>QR de registro · siempre el mismo</h2>
+        <div class="rule"></div>
+        <div class="cd-head">
+          <div class="cd-info">
+            <p style="margin:0 0 8px">Este QR va en las presentaciones y no cambia nunca. Lleva al formulario de registro (fecha, nombre y apellido, empresa, cargo, área, mail, calificación y observaciones). Cada respuesta entra a la base de abajo.</p>
+            <p style="margin:0 0 4px;font-size:13px">Link: <a id="pLink" target="_blank" rel="noopener" class="mono" style="font-size:12px;word-break:break-all"></a></p>
+            <div id="pAviso"></div>
+            <div class="btns" style="margin-top:10px">
+              <button class="btn primary" id="pProyectar" type="button">Proyectar QR</button>
+              <button class="btn" id="pQrPng" type="button">Descargar QR (PNG)</button>
+              <button class="btn" id="pCopiar" type="button">Copiar link</button>
+            </div>
+          </div>
+          <canvas id="pQr" width="200" height="200" aria-label="Código QR del registro de asistencia"></canvas>
+        </div>
+      </div>
+      <div class="card c5">
+        <p class="eyebrow">Planillas anteriores</p>
+        <h2>Cargar respuestas viejas</h2>
+        <div class="rule"></div>
+        <p style="margin:0 0 10px">Para sumar a la base las respuestas del Microsoft Forms o de otra planilla. Lo que ya está en la base no se toca.</p>
+        <div class="btns">
+          <span class="btn filebtn">Importar planilla<input type="file" id="pArchivo" accept=".xlsx,.xls,.csv" aria-label="Importar planilla de respuestas"></span>
+          <button class="btn" id="pPegar" type="button">Pegar desde Excel</button>
+        </div>
+        <div id="pImpMsg"></div>
+      </div>
+
+      <div class="card c12">
+        <p class="eyebrow">Base de datos</p>
+        <h2>Respuestas</h2>
+        <div class="rule"></div>
+        <div class="kpis">
+          <div class="kpi"><div class="v" id="pkResp">0</div><div class="l">Respuestas</div></div>
+          <div class="kpi"><div class="v" id="pkPers">0</div><div class="l">Personas</div></div>
+          <div class="kpi"><div class="v" id="pkEmp">0</div><div class="l">Empresas</div></div>
+          <div class="kpi ok"><div class="v" id="pkCal">—</div><div class="l">Calificación promedio</div></div>
+          <div class="kpi"><div class="v" id="pkHoy">0</div><div class="l">Hoy</div></div>
+        </div>
+        <div class="toolbar">
+          <label class="muted" style="font-size:13px">Fecha <input type="date" id="pFecha" style="width:auto"></label>
+          <input type="search" id="pBuscar" placeholder="Buscar nombre, mail, empresa, cargo…" aria-label="Buscar en la base">
+          <span style="flex:1"></span>
+          <button class="btn" id="pExcel" type="button">Exportar a Excel</button>
+        </div>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>Fecha</th><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Cargo</th><th>Área</th><th>Calif.</th><th>Observaciones</th><th>Curso</th><th></th></tr></thead>
+            <tbody id="pBody"></tbody>
+          </table>
+        </div>
+        <div id="pMsg"></div>
       </div>
     </div>
   </section>

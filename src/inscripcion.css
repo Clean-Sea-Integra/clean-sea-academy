@@ -31,3 +31,18 @@ button:disabled{opacity:.6;cursor:wait}
 .ok-mark{width:56px;height:56px;border-radius:50%;background:var(--ok-bg);color:var(--ok-fg);display:grid;place-items:center;font-size:30px;margin-bottom:12px}
 #listo p{margin:10px 0 0}
 [hidden]{display:none!important}
+.intro{margin:6px 0 18px;font-size:14px}
+.req{color:var(--err-fg)}
+label small{display:block;margin-top:-2px}
+.vista{color:var(--ok-fg)}
+textarea{font:inherit;font-weight:400;font-size:16px;padding:12px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--fg);width:100%;resize:vertical}
+textarea:focus{outline:2px solid var(--navy);outline-offset:1px;border-color:var(--navy)}
+fieldset.stars{border:0;margin:0;padding:0;min-width:0}
+fieldset.stars legend{font-weight:600;font-size:14px;padding:0;margin-bottom:6px}
+.stars-row{display:flex;gap:6px}
+.stars-row input{position:absolute;opacity:0;width:1px;height:1px}
+.stars-row label{display:block;width:44px;height:44px;cursor:pointer;background:no-repeat center/36px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z' fill='none' stroke='%2355606E' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.stars-row label.on{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z' fill='%23F2B01E' stroke='%23C98A00' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.stars-row input:focus-visible+label{outline:2px solid var(--navy);border-radius:6px}
+fieldset[aria-invalid=true] legend{color:var(--err-fg)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}

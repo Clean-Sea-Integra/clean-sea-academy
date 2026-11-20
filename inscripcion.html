@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Inscripción · CLEAN SEA Academy</title>
+<title>Registro de asistencia · CLEAN SEA Academy</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,58 +15,53 @@
 <main class="wrap">
   <header class="brand">
     <img src="/assets/logo.png" alt="" width="56" height="56">
-    <div><p class="name">CLEAN SEA <span>ACADEMY</span></p><p class="sub">Registro de asistencia</p></div>
+    <div><p class="name">CLEAN SEA <span>ACADEMY</span></p><p class="sub">Registro de asistencia · Capacitación</p></div>
   </header>
 
-  <section class="card" id="cargando"><p class="muted">Cargando el curso…</p></section>
-
-  <section class="card" id="noCurso" hidden>
-    <h1>Curso no encontrado</h1>
-    <p class="muted">El código QR no corresponde a un curso vigente. Pedile al instructor que lo vuelva a mostrar.</p>
-  </section>
-
-  <section class="card" id="cerrado" hidden>
-    <h1 class="ctitulo"></h1>
-    <p class="cmeta muted"></p>
-    <div class="msg warn">La inscripción a este curso ya está cerrada. Si asististe y no te anotaste, avisale al instructor.</div>
-  </section>
-
-  <section class="card" id="formCard" hidden>
-    <p class="eyebrow">Curso</p>
-    <h1 class="ctitulo"></h1>
-    <p class="cmeta muted"></p>
+  <section class="card" id="formCard">
+    <h1>Registro de asistencia</h1>
+    <p class="muted intro">Complete este registro al finalizar la capacitación. Los datos se utilizan para emitir el certificado de asistencia.</p>
     <form id="form" novalidate>
-      <label>Nombre y apellido
-        <input id="fNombre" autocomplete="name" required maxlength="120" placeholder="Como querés que figure en el certificado">
-        <small id="fNombreVista"></small></label>
-      <label>Mail
-        <input id="fEmail" type="email" inputmode="email" autocomplete="email" required maxlength="200" placeholder="Ahí te llega el certificado"></label>
-      <label>Empresa
+      <label><span>Fecha <span class="req">*</span></span>
+        <small>Fecha en que se dictó la capacitación.</small>
+        <input id="fFecha" type="date" required></label>
+      <label><span>Nombre y apellido <span class="req">*</span></span>
+        <small>Tal como debe figurar en el certificado.</small>
+        <input id="fNombre" autocomplete="name" required maxlength="120">
+        <small id="fNombreVista" class="vista"></small></label>
+      <label><span>Empresa <span class="req">*</span></span>
+        <small>Razón social, tal como debe figurar en el registro de asistencia.</small>
         <input id="fEmpresa" autocomplete="organization" required maxlength="120"></label>
-      <label>Área
-        <input id="fArea" autocomplete="off" required maxlength="120" placeholder="Ej.: Mantenimiento, Producción, HSE"></label>
-      <label>Tipo de puesto
-        <select id="fPuesto" required>
-          <option value="">Elegí una opción</option>
-          <option>Director/Gerente</option>
-          <option>Jefe</option>
-          <option>Supervisor</option>
-          <option>Coordinador</option>
-          <option>Analista/Administrativo</option>
-          <option>Operador</option>
-          <option>Otro</option>
-        </select></label>
-      <p class="legal">Tus datos los usa CLEAN SEA S.A. para emitir tu certificado y para contactarte sobre capacitaciones y servicios. Podés pedir que los corrijamos o eliminemos escribiéndonos.</p>
+      <label><span>Cargo <span class="req">*</span></span>
+        <input id="fCargo" autocomplete="organization-title" required maxlength="120"></label>
+      <label><span>Área <span class="req">*</span></span>
+        <input id="fArea" autocomplete="off" required maxlength="120"></label>
+      <label><span>Mail <span class="req">*</span></span>
+        <small>Ejemplo: nombre@empresa.com. El certificado de asistencia se enviará a esta dirección.</small>
+        <input id="fEmail" type="email" inputmode="email" autocomplete="email" required maxlength="200"></label>
+      <fieldset class="stars" id="fCalif">
+        <legend>¿Cómo calificaría la capacitación? <span class="req">*</span></legend>
+        <div class="stars-row">
+          <input type="radio" name="calif" id="s1" value="1"><label for="s1" title="1 de 5"><span class="sr">1 estrella</span></label>
+          <input type="radio" name="calif" id="s2" value="2"><label for="s2" title="2 de 5"><span class="sr">2 estrellas</span></label>
+          <input type="radio" name="calif" id="s3" value="3"><label for="s3" title="3 de 5"><span class="sr">3 estrellas</span></label>
+          <input type="radio" name="calif" id="s4" value="4"><label for="s4" title="4 de 5"><span class="sr">4 estrellas</span></label>
+          <input type="radio" name="calif" id="s5" value="5"><label for="s5" title="5 de 5"><span class="sr">5 estrellas</span></label>
+        </div>
+      </fieldset>
+      <label>Observaciones, comentarios y/o sugerencias
+        <textarea id="fObs" rows="3" maxlength="2000"></textarea></label>
+      <p class="legal">Sus datos los usa CLEAN SEA S.A. para emitir el certificado y para contactarlo sobre capacitaciones y servicios. Puede pedir que los corrijamos o eliminemos escribiendo a academy@cleansea.com.ar.</p>
       <div id="fMsg"></div>
-      <button type="submit" id="fBtn">Registrar asistencia</button>
+      <button type="submit" id="fBtn">Enviar</button>
     </form>
   </section>
 
   <section class="card" id="listo" hidden>
     <div class="ok-mark" aria-hidden="true">✓</div>
-    <h1 id="lTitulo">¡Listo!</h1>
+    <h1 id="lTitulo">¡Gracias!</h1>
     <p id="lTexto"></p>
-    <p class="muted" style="font-size:13px">Si te equivocaste en algún dato, volvé a escanear el QR y cargalo de nuevo con el mismo mail: se actualiza.</p>
+    <p class="muted" style="font-size:13px">Si se equivocó en algún dato, vuelva a escanear el QR y envíelo de nuevo con el mismo mail y la misma fecha: se actualiza.</p>
   </section>
 </main>
 <script type="module" src="/src/inscripcion.js"></script>

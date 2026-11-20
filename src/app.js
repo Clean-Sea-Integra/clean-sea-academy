@@ -35,12 +35,13 @@ function modal(title, bodyHtml, buttons){
 document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !$("modal").hidden){ var bs = $("mdBtns").querySelectorAll("button"); if (bs.length) bs[0].click(); } });
 
 /* ── Pestañas ── */
-var tabs = ["cur","ind","mas","pre","des","reg"];
+var tabs = ["cur","per","ind","mas","pre","des","reg"];
 function showTab(k){
   tabs.forEach(function(t){ $("t-"+t).setAttribute("aria-selected", t === k ? "true" : "false"); $("p-"+t).hidden = t !== k; });
   if (k === "pre") refreshPreviewList(true);
   if (k === "reg") renderReg();
   if (k === "cur") renderCursos();
+  if (k === "per") renderPersonas();
 }
 tabs.forEach(function(t){ $("t-"+t).addEventListener("click", function(){ showTab(t); }); });
 
@@ -649,7 +650,6 @@ $("rExport").addEventListener("click", function(){
 /* ═════════ 0 · CURSOS · inscripción por QR y envío de diplomas ═════════ */
 var cur = { list: [], counts: {}, id: null, ins: [], sel: new Set(), canal: null, status: {} };
 var PUBLIC_BASE = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, "");
-function cursoLink(c){ return PUBLIC_BASE + "/i/" + c.token; }
 function cursoSel(){ return cur.list.find(function(c){ return c.id === cur.id; }) || null; }
 
 async function cargarCursos(){
@@ -664,11 +664,11 @@ async function cargarCursos(){
 function renderCursos(){
   $("tabCur").textContent = cur.list.length;
   var box = $("cList");
-  if (!cur.list.length){ box.innerHTML = '<div class="empty"><h3>Todavía no hay cursos</h3><p style="margin:0">Creá el curso antes de dictarlo: vas a obtener el QR para que los participantes se anoten.</p></div>'; }
-  else box.innerHTML = '<table><thead><tr><th>Fecha</th><th>Curso</th><th>Inscriptos</th><th>Inscripción</th></tr></thead><tbody>' +
+  if (!cur.list.length){ box.innerHTML = '<div class="empty"><h3>Todavía no hay cursos</h3><p style="margin:0">Creá el curso con su título y fecha. Después elegí de la base a quién darle el diploma.</p></div>'; }
+  else box.innerHTML = '<table><thead><tr><th>Fecha</th><th>Curso</th><th>Participantes</th></tr></thead><tbody>' +
     cur.list.map(function(c){
       return '<tr data-c="' + c.id + '" class="' + (c.id === cur.id ? "sel" : "") + '" style="cursor:pointer"><td class="mono">' + esc(isoToAr(c.fecha)) + "</td><td>" + esc(c.titulo) + (c.lugar ? '<div class="muted" style="font-size:12px">' + esc(c.lugar) + "</div>" : "") +
-        '</td><td class="mono">' + (cur.counts[c.id] || 0) + "</td><td>" + (c.abierto ? '<span class="pill ok">Abierta</span>' : '<span class="pill warn">Cerrada</span>') + "</td></tr>";
+        '</td><td class="mono">' + (cur.counts[c.id] || 0) + "</td></tr>";
     }).join("") + "</tbody></table>";
   renderCursoDetalle();
 }
@@ -684,7 +684,7 @@ $("cForm").addEventListener("submit", async function(e){
   if (!k.title.fits){ msg("cMsg", "err", "El título es demasiado extenso para el certificado: acortalo."); return; }
   var r = await sb.from("academy_cursos").insert({ titulo: t, fecha: f, lugar: C.clean($("cLugar").value) || null, instructor: C.clean($("cInstructor").value) || null }).select().single();
   if (r.error){ msg("cMsg", "err", "No se pudo crear el curso: " + esc(r.error.message)); return; }
-  $("cForm").reset(); msg("cMsg", "ok", "Curso creado. Proyectá el QR al empezar la clase.");
+  $("cForm").reset(); msg("cMsg", "ok", "Curso creado. Elegí los participantes de la base.");
   await cargarCursos(); abrirCurso(r.data.id);
 });
 
@@ -699,7 +699,7 @@ async function abrirCurso(id){
 }
 async function cargarInscriptos(){
   if (!cur.id) return;
-  var r = await sb.from("academy_inscripciones").select("*").eq("curso_id", cur.id).order("created_at");
+  var r = await sb.from("academy_inscripciones").select("*, respuesta:academy_respuestas(calificacion, observaciones)").eq("curso_id", cur.id).order("created_at");
   if (r.error){ msg("cdMsg", "err", "No se pudieron leer los inscriptos: " + esc(r.error.message)); return; }
   cur.ins = r.data; cur.counts[cur.id] = r.data.length;
   await validarInscriptos();
@@ -724,27 +724,23 @@ function renderCursoDetalle(){
   box.hidden = !c; if (!c) return;
   $("cdTitulo").textContent = c.titulo;
   $("cdMeta").textContent = isoToAr(c.fecha) + (c.lugar ? " · " + c.lugar : "") + (c.instructor ? " · Instructor: " + c.instructor : "");
-  $("cdLink").textContent = cursoLink(c); $("cdLink").href = cursoLink(c);
-  $("cdAbrir").textContent = c.abierto ? "Cerrar inscripción" : "Reabrir inscripción";
-  $("cdEstado").innerHTML = c.abierto ? '<span class="pill ok">Inscripción abierta</span>' : '<span class="pill warn">Inscripción cerrada: el QR ya no acepta inscriptos</span>';
-  QRCode.toCanvas($("cdQr"), cursoLink(c), { width: 220, margin: 1, color: { dark: "#1B3765" } }, function(){});
+  var cals = cur.ins.map(function(x){ return x.respuesta && x.respuesta.calificacion; }).filter(Boolean);
+  $("cdEstado").innerHTML = cals.length ? '<span class="pill ok">Calificación promedio ' + (cals.reduce(function(a, b){ return a + b; }, 0) / cals.length).toFixed(1).replace(".", ",") + " ★ (" + cals.length + ")</span>" : "";
   var env = cur.ins.filter(function(x){ return x.diploma_enviado_at; }).length;
   var err = cur.ins.filter(function(x){ return cur.status[x.id] && cur.status[x.id].errs.length; }).length;
   $("ckTotal").textContent = cur.ins.length; $("ckEnv").textContent = env; $("ckPend").textContent = cur.ins.length - env; $("ckErr").textContent = err; $("ckSel").textContent = cur.sel.size;
   var tb = $("cdBody");
-  if (!cur.ins.length){ tb.innerHTML = '<tr><td colspan="9" class="empty">Todavía no se anotó nadie. Los inscriptos aparecen acá en el momento.</td></tr>'; }
+  if (!cur.ins.length){ tb.innerHTML = '<tr><td colspan="9" class="empty">Todavía no hay participantes. Tocá «Elegir participantes de la base» para traer a quienes se registraron con el QR.</td></tr>'; }
   else tb.innerHTML = cur.ins.map(function(x, i){
     var st = cur.status[x.id], pills = st ? statusHtml(st) : "";
     if (x.diploma_enviado_at) pills = '<span class="pill ok">Diploma enviado ' + esc(fmtFH(x.diploma_enviado_at)) + "</span>" + (st && st.errs.length ? pills : "");
-    if (x.origen === "forms") pills += '<span class="pill" title="Importado de Microsoft Forms">Forms</span>';
-    else if (x.origen === "manual") pills += '<span class="pill" title="Pegado desde Excel">Excel</span>';
     return '<tr data-i="' + x.id + '"' + (cur.sel.has(x.id) ? ' class="sel"' : "") + '><td class="chk"><input type="checkbox" data-csel' + (cur.sel.has(x.id) ? " checked" : "") + ' aria-label="Seleccionar ' + esc(x.nombre) + '"></td>' +
       '<td class="num">' + (i + 1) + "</td>" +
       '<td><input type="text" data-cf="nombre" value="' + esc(x.nombre) + '" aria-label="Nombre"></td>' +
       '<td><input type="email" data-cf="email" value="' + esc(x.email) + '" aria-label="Mail"></td>' +
       '<td><input type="text" data-cf="empresa" value="' + esc(x.empresa) + '" aria-label="Empresa"></td>' +
       '<td><input type="text" data-cf="area" value="' + esc(x.area || "") + '" aria-label="Área"></td>' +
-      '<td style="font-size:12.5px;white-space:nowrap">' + esc(x.puesto || "") + "</td>" +
+      '<td style="font-size:12.5px">' + esc(x.cargo || x.puesto || "") + "</td>" +
       '<td class="st">' + pills + "</td>" +
       '<td class="act"><button class="btn ghost" type="button" data-cver>Ver</button><button class="btn ghost" type="button" data-cenv>Enviar</button><button class="btn ghost danger" type="button" data-cdel>Quitar</button></td></tr>';
   }).join("");
@@ -781,35 +777,6 @@ $("cdBody").addEventListener("click", async function(e){
   }
 });
 
-$("cdAbrir").addEventListener("click", async function(){
-  var c = cursoSel(); if (!c) return;
-  var r = await sb.from("academy_cursos").update({ abierto: !c.abierto }).eq("id", c.id);
-  if (r.error){ msg("cdMsg", "err", esc(r.error.message)); return; }
-  c.abierto = !c.abierto; renderCursos();
-});
-$("cdCopiar").addEventListener("click", async function(){
-  var c = cursoSel(); if (!c) return;
-  try { await navigator.clipboard.writeText(cursoLink(c)); toast("Link copiado"); } catch(e){ toast(cursoLink(c)); }
-});
-$("cdProyectar").addEventListener("click", function(){
-  var c = cursoSel(); if (!c) return;
-  $("qrTitulo").textContent = c.titulo; $("qrSub").textContent = isoToAr(c.fecha) + (c.lugar ? " · " + c.lugar : "");
-  $("qrLink").textContent = cursoLink(c).replace(/^https?:\/\//, "");
-  var size = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.62, 720);
-  QRCode.toCanvas($("qrBig"), cursoLink(c), { width: Math.round(size), margin: 1, color: { dark: "#1B3765" } }, function(){});
-  $("qrFull").hidden = false;
-  if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){});
-});
-function cerrarQr(){ $("qrFull").hidden = true; if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function(){}); }
-$("qrCerrar").addEventListener("click", cerrarQr);
-document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !$("qrFull").hidden) cerrarQr(); });
-$("cdQrPng").addEventListener("click", function(){
-  var c = cursoSel(); if (!c) return;
-  QRCode.toDataURL(cursoLink(c), { width: 1200, margin: 2, color: { dark: "#1B3765" } }).then(function(u){
-    fetch(u).then(function(r){ return r.blob(); }).then(function(b){ save("QR - " + C.shortCourse(c.titulo, 50) + " - " + isoToAr(c.fecha).replace(/\//g, "-") + ".png", b); });
-  });
-});
-
 $("cdMasivo").addEventListener("click", async function(){
   var c = cursoSel(); if (!c || !cur.ins.length) return;
   var set = cur.sel.size ? cur.ins.filter(function(x){ return cur.sel.has(x.id); }) : cur.ins;
@@ -820,9 +787,9 @@ $("cdMasivo").addEventListener("click", async function(){
   msg("impMsg", "info", "Cargados " + set.length + " inscriptos del curso. Desde acá podés generar el ZIP por empresa.");
 });
 
-/* ── Importar respuestas de Microsoft Forms ──
-   El QR del instructor es siempre el mismo y lleva a un Forms; las respuestas de todos los cursos
-   caen en una planilla maestra. Cada curso tiene una fecha única: se toman las respuestas de ese día. */
+/* ═════════ PERSONAS · QR fijo + base maestra de respuestas ═════════
+   El instructor usa siempre el mismo QR (→ /registro). Cada respuesta entra a academy_respuestas
+   (una por persona y fecha) y actualiza academy_personas. Desde el curso se elige de acá a quién darle el diploma. */
 var PUESTOS = ["Director/Gerente","Jefe","Supervisor","Coordinador","Analista/Administrativo","Operador","Otro"];
 function puestoDeTexto(t){
   var k = normKey(t || "");
@@ -836,67 +803,6 @@ function puestoDeTexto(t){
   if (/operari|operador|operat|maquinist|marin|tripul|marinero|ayudante/.test(k)) return "Operador";
   return "Otro";
 }
-function fechaIso(v){
-  if (v == null || v === "") return "";
-  var z = function(n){ return String(n).padStart(2, "0"); };
-  if (v instanceof Date && !isNaN(v)) return v.getFullYear() + "-" + z(v.getMonth() + 1) + "-" + z(v.getDate());
-  if (typeof v === "number"){ var d = XLSX.SSF.parse_date_code(v); return d ? d.y + "-" + z(d.m) + "-" + z(d.d) : ""; }
-  var s = String(v).trim(), m;
-  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + "-" + z(m[2]) + "-" + z(m[3]);
-  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))){
-    var a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
-    var dia = a > 12 ? a : b > 12 ? b : a, mes = a > 12 ? b : b > 12 ? a : b; // ambiguo: se asume día/mes
-    return y + "-" + z(mes) + "-" + z(dia);
-  }
-  return "";
-}
-function horaTs(v){
-  if (v instanceof Date && !isNaN(v)) return v.toISOString();
-  return null;
-}
-function columnasForms(hdr){
-  var H = hdr.map(function(h){ return normKey(h); });
-  var find = function(re, skip){ for (var i = 0; i < H.length; i++){ if ((!skip || skip.indexOf(i) < 0) && re.test(H[i])) return i; } return -1; };
-  var col = {};
-  col.fecha = find(/^hora de finalizacion|^completion time|^hora de envio|^marca temporal|^timestamp/);
-  if (col.fecha < 0) col.fecha = find(/^hora de inicio|^start time|^fecha/);
-  // Forms agrega "Correo electrónico" y "Nombre" de la cuenta (suelen decir "anonymous"): se prefieren las preguntas.
-  var base = [find(/^correo electronico$|^email$/), find(/^nombre$|^name$/), find(/^id$/)].filter(function(i){ return i >= 0; });
-  col.nombreCompleto = find(/(nombre.*apellido|apellido.*nombre|nombre completo|full name)/);
-  col.apellido = col.nombreCompleto >= 0 ? -1 : find(/^apellidos?\b/);
-  col.nombre = col.nombreCompleto >= 0 ? -1 : find(/^nombres?\b/, base);
-  if (col.nombre < 0 && col.nombreCompleto < 0) col.nombre = find(/^nombres?$/);
-  col.email = find(/(mail|correo)/, base);
-  if (col.email < 0) col.email = find(/(mail|correo)/);
-  col.empresa = find(/(empresa|compan|organiz|company)/);
-  col.area = find(/(^area\b|\barea$|sector|departamento)/);
-  col.puesto = find(/(puesto|cargo|position|rol\b)/);
-  return col;
-}
-async function leerForms(file){
-  var buf = new Uint8Array(await file.arrayBuffer()), wb;
-  if (/\.csv$/i.test(file.name)){
-    var text = new TextDecoder("utf-8").decode(buf); if (text.indexOf("�") >= 0) text = new TextDecoder("windows-1252").decode(buf);
-    wb = XLSX.read(text.replace(/^﻿/, ""), { type: "string", cellDates: true });
-  } else wb = XLSX.read(buf, { type: "array", cellDates: true });
-  var ws = wb.Sheets[wb.SheetNames[0]];
-  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
-  if (!aoa.length) throw new Error("La planilla está vacía.");
-  var col = columnasForms(aoa[0]);
-  if (col.fecha < 0) throw new Error("No encontré la columna de fecha de la respuesta (\"Hora de finalización\" o \"Hora de inicio\").");
-  if (col.email < 0) throw new Error("No encontré la columna del mail.");
-  if (col.nombre < 0 && col.nombreCompleto < 0) throw new Error("No encontré la columna del nombre.");
-  var out = [];
-  for (var r = 1; r < aoa.length; r++){
-    var row = aoa[r], get = function(i){ return i >= 0 ? C.clean(row[i]) : ""; };
-    var nombre = col.nombreCompleto >= 0 ? get(col.nombreCompleto) : C.clean(get(col.nombre) + " " + get(col.apellido));
-    var email = get(col.email).toLowerCase();
-    if (!nombre && !email) continue;
-    out.push({ fila: r + 1, fecha: fechaIso(row[col.fecha]), hora: horaTs(row[col.fecha]), nombre: nombre, email: email,
-      empresa: get(col.empresa), area: get(col.area), puestoTexto: get(col.puesto), puesto: puestoDeTexto(get(col.puesto)) });
-  }
-  return { filas: out, col: col, hoja: wb.SheetNames[0], encabezados: aoa[0] };
-}
 // "PEREZ JUAN" / "juan perez" → "Perez Juan" / "Juan Perez" (mismo criterio que el formulario del QR).
 function nombrePropio(s){
   var MIN = ["de","del","la","las","los","y","da","das","do","dos","van","von","di"];
@@ -907,60 +813,186 @@ function nombrePropio(s){
     return low.split("-").map(function(p){ return p.charAt(0).toUpperCase() + p.slice(1); }).join("-");
   }).join(" ");
 }
-$("cdForms").addEventListener("change", async function(e){
-  var f = e.target.files[0]; e.target.value = ""; if (!f) return;
-  var c = cursoSel(); if (!c) return;
-  try {
-    msg("cdMsg", "info", "Leyendo «" + esc(f.name) + "»…");
-    var p = await leerForms(f);
-    var delDia = p.filas.filter(function(x){ return x.fecha === c.fecha; });
-    if (!delDia.length){
-      var porFecha = {}; p.filas.forEach(function(x){ if (x.fecha) porFecha[x.fecha] = (porFecha[x.fecha] || 0) + 1; });
-      var fechas = Object.keys(porFecha).sort().reverse().slice(0, 8).map(function(d){ return isoToAr(d) + " (" + porFecha[d] + ")"; });
-      msg("cdMsg", "warn", "La planilla no tiene respuestas del " + esc(isoToAr(c.fecha)) + ", la fecha del curso." + (fechas.length ? " Fechas con respuestas: " + esc(fechas.join(", ")) + "." : ""));
-      return;
-    }
-    await confirmarEImportar(c, delDia, { titulo: "Importar respuestas de Forms", origen: "forms", fuente: "«" + f.name + "»",
-      intro: "La planilla tiene " + p.filas.length + " respuestas; <b>" + delDia.length + "</b> son de esta fecha.",
-      sinColEmpresa: p.col.empresa < 0 ? "La planilla no tiene columna de empresa: quedan como «Sin empresa» y se pueden corregir en la tabla. Conviene agregar la pregunta Empresa al Forms." : "",
-      sinColPuesto: p.col.puesto < 0 });
-  } catch(err){ msg("cdMsg", "err", esc(err.message)); }
+function estrellas(n){ return n ? '<span class="stars-txt" title="' + n + ' de 5">' + "★★★★★".slice(0, n) + '<span style="opacity:.25">' + "★★★★★".slice(n) + "</span></span>" : ""; }
+function hoyAr(){ return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).slice(0, 10); }
+
+var REGISTRO_URL = PUBLIC_BASE + "/registro";
+var per = { list: [], cursosDe: {}, canal: null };
+
+function pintarQrFijo(){
+  $("pLink").textContent = REGISTRO_URL; $("pLink").href = REGISTRO_URL;
+  QRCode.toCanvas($("pQr"), REGISTRO_URL, { width: 200, margin: 1, color: { dark: "#1B3765" } }, function(){});
+  $("pAviso").innerHTML = /vercel\.app/.test(REGISTRO_URL) ? '<div class="msg warn" style="margin-top:8px">Dirección provisoria para probar: todavía no pegues este QR en las presentaciones. Cuando el dominio definitivo esté activo, el QR cambia una sola vez y queda fijo.</div>' : "";
+}
+$("pProyectar").addEventListener("click", function(){
+  $("qrTitulo").textContent = "Registro de asistencia"; $("qrSub").textContent = "CLEAN SEA Academy";
+  $("qrLink").textContent = REGISTRO_URL.replace(/^https?:\/\//, "");
+  var size = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.62, 720);
+  QRCode.toCanvas($("qrBig"), REGISTRO_URL, { width: Math.round(size), margin: 1, color: { dark: "#1B3765" } }, function(){});
+  $("qrFull").hidden = false;
+  if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function(){});
+});
+function cerrarQr(){ $("qrFull").hidden = true; if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function(){}); }
+$("qrCerrar").addEventListener("click", cerrarQr);
+document.addEventListener("keydown", function(e){ if (e.key === "Escape" && !$("qrFull").hidden) cerrarQr(); });
+$("pQrPng").addEventListener("click", function(){
+  QRCode.toDataURL(REGISTRO_URL, { width: 1200, margin: 2, color: { dark: "#1B3765" } }).then(function(u){
+    fetch(u).then(function(r){ return r.blob(); }).then(function(b){ save("QR - Registro de asistencia - CLEAN SEA Academy.png", b); });
+  });
+});
+$("pCopiar").addEventListener("click", async function(){
+  try { await navigator.clipboard.writeText(REGISTRO_URL); toast("Link copiado"); } catch(e){ toast(REGISTRO_URL); }
 });
 
-// Resumen + confirmación + alta (Forms y Pegar desde Excel). lista: [{fila, nombre, email, empresa, area, puesto, puestoTexto, hora?}]
-async function confirmarEImportar(c, lista, o){
-  var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); })), vistos = new Set();
-  var nuevos = [], repetidos = 0, invalidos = [];
-  lista.forEach(function(x){
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3){ invalidos.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : "")); return; }
-    if (ya.has(x.email) || vistos.has(x.email)){ repetidos++; return; }
-    vistos.add(x.email); nuevos.push(x);
-  });
-  var sinEmpresa = nuevos.filter(function(x){ return !x.empresa; }).length;
-  var vista = nuevos.length ? '<div class="tablebox" style="max-height:220px;margin:0 0 10px"><table style="min-width:0;font-size:12.5px"><thead><tr><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Puesto</th></tr></thead><tbody>' +
-    nuevos.map(function(x){ return "<tr><td>" + esc(nombrePropio(x.nombre)) + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa || "Sin empresa") + "</td><td>" + esc(x.puesto) +
-      (x.puestoTexto && normKey(x.puestoTexto) !== normKey(x.puesto) ? ' <span class="muted">(' + esc(x.puestoTexto) + ")</span>" : "") + "</td></tr>"; }).join("") +
-    "</tbody></table></div>" : "";
-  var ok = await modal(o.titulo,
-    "<p><b>Curso:</b> " + esc(c.titulo) + "<br><b>Fecha:</b> " + esc(isoToAr(c.fecha)) + "</p>" +
-    "<p>" + o.intro + "</p>" +
-    "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + nuevos.length + "</b> se agregan como inscriptos</li>" +
-    (repetidos ? "<li>" + repetidos + " ya estaban (mismo mail): no se tocan</li>" : "") +
-    (invalidos.length ? "<li>" + invalidos.length + " sin mail o nombre válido: se omiten (" + esc(invalidos.slice(0, 5).join(", ")) + (invalidos.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" + vista +
-    (o.sinColEmpresa ? '<div class="msg warn">' + o.sinColEmpresa + "</div>" :
-      sinEmpresa ? '<div class="msg warn">' + sinEmpresa + " sin empresa: quedan como «Sin empresa».</div>" : "") +
-    (o.sinColPuesto ? '<div class="msg warn">No hay columna de puesto: quedan como «Otro».</div>' : ""),
-    [{ label: "Cancelar", value: false }, { label: "Importar " + nuevos.length, value: true, primary: true }]);
-  if (!ok || !nuevos.length){ msg("cdMsg", "", ""); return; }
-  var filas = nuevos.map(function(x){ return { curso_id: c.id, nombre: nombrePropio(x.nombre).slice(0, 120), email: x.email.slice(0, 200),
-    empresa: (x.empresa || "Sin empresa").slice(0, 120), area: x.area ? x.area.slice(0, 120) : null, puesto: x.puesto, origen: o.origen, respondido_at: x.hora || null }; });
-  var r = await sb.from("academy_inscripciones").insert(filas);
-  if (r.error){ msg("cdMsg", "err", "No se pudo importar: " + esc(r.error.message)); return; }
-  msg("cdMsg", "ok", nuevos.length + " inscriptos importados desde " + esc(o.fuente) + ". Revisá nombres y empresas antes de enviar los diplomas.");
-  cargarInscriptos();
+async function cargarPersonas(){
+  var r = await sb.from("academy_respuestas").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false }).limit(10000);
+  if (r.error){ msg("pMsg", "err", "No se pudo leer la base: " + esc(r.error.message)); return; }
+  per.list = r.data;
+  var k = await sb.from("academy_inscripciones").select("respuesta_id, curso_id");
+  per.cursosDe = {};
+  (k.data || []).forEach(function(x){ if (x.respuesta_id) (per.cursosDe[x.respuesta_id] = per.cursosDe[x.respuesta_id] || []).push(x.curso_id); });
+  $("tabPer").textContent = per.list.length;
+  if (!$("p-per").hidden) renderPersonas();
 }
+function cursoNombre(id){ var c = cur.list.find(function(x){ return x.id === id; }); return c ? c.titulo : "(curso)"; }
+function textoBusqueda(x){ return normKey([x.nombre, x.email, x.empresa, x.cargo, x.area, x.observaciones].join(" ")); }
+function filtrarRespuestas(lista, fecha, q){
+  var k = normKey(q || "");
+  return lista.filter(function(x){ return (!fecha || x.fecha === fecha) && (!k || textoBusqueda(x).indexOf(k) >= 0); });
+}
+function personasFiltradas(){ return filtrarRespuestas(per.list, $("pFecha").value, $("pBuscar").value); }
+function renderPersonas(){
+  pintarQrFijo();
+  var f = personasFiltradas();
+  var pers = new Set(f.map(function(x){ return x.email; })), emps = new Set(f.map(function(x){ return normKey(x.empresa); }));
+  var cal = f.filter(function(x){ return x.calificacion; });
+  var hoy = hoyAr();
+  $("pkResp").textContent = f.length; $("pkPers").textContent = pers.size; $("pkEmp").textContent = emps.size;
+  $("pkCal").textContent = cal.length ? (cal.reduce(function(a, x){ return a + x.calificacion; }, 0) / cal.length).toFixed(1).replace(".", ",") + " ★" : "—";
+  $("pkHoy").textContent = per.list.filter(function(x){ return x.created_at && x.created_at.slice(0, 10) === hoy || x.fecha === hoy; }).length;
+  var tb = $("pBody");
+  if (!f.length){ tb.innerHTML = '<tr><td colspan="10" class="empty">' + (per.list.length ? "No hay respuestas con ese filtro." : "Todavía no hay respuestas. Aparecen acá en el momento en que alguien completa el registro con el QR.") + "</td></tr>"; return; }
+  tb.innerHTML = f.slice(0, 1500).map(function(x){
+    var cs = (per.cursosDe[x.id] || []).map(function(id){ return '<span class="pill ok" title="' + esc(cursoNombre(id)) + '">' + esc(C.shortCourse(cursoNombre(id), 22)) + "</span>"; }).join("");
+    return '<tr data-r="' + x.id + '"><td class="mono">' + esc(isoToAr(x.fecha)) + "</td><td>" + esc(x.nombre) + (x.origen !== "qr" ? ' <span class="pill" title="Importado">' + (x.origen === "forms" ? "Forms" : "Excel") + "</span>" : "") +
+      "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + esc(x.area || "") + "</td><td>" + estrellas(x.calificacion) +
+      '</td><td class="obs">' + esc(x.observaciones || "") + "</td><td>" + cs + '</td><td class="act"><button class="btn ghost danger" type="button" data-rdel>Borrar</button></td></tr>';
+  }).join("") + (f.length > 1500 ? '<tr><td colspan="10" class="muted">Se muestran 1500 de ' + f.length + ". Filtrá por fecha o buscá para ver el resto (el Excel trae todo).</td></tr>" : "");
+}
+$("pFecha").addEventListener("change", renderPersonas);
+$("pBuscar").addEventListener("input", renderPersonas);
+$("pBody").addEventListener("click", async function(e){
+  if (!e.target.closest("[data-rdel]")) return;
+  var tr = e.target.closest("tr[data-r]"); var x = per.list.find(function(y){ return y.id === tr.dataset.r; }); if (!x) return;
+  var ok = await modal("Borrar respuesta", "<p>Se borra la respuesta de <b>" + esc(x.nombre) + "</b> (" + esc(x.email) + ") del " + esc(isoToAr(x.fecha)) + ". Si no tiene otras respuestas, también sale de la base de personas. Los cursos en que ya está no cambian. No se puede deshacer.</p>",
+    [{ label: "Cancelar", value: false }, { label: "Borrar", value: true, primary: true }]);
+  if (!ok) return;
+  var r = await sb.from("academy_respuestas").delete().eq("id", x.id);
+  if (r.error){ msg("pMsg", "err", esc(r.error.message)); return; }
+  if (!per.list.some(function(y){ return y.id !== x.id && y.persona_id === x.persona_id; })) await sb.from("academy_personas").delete().eq("id", x.persona_id);
+  cargarPersonas();
+});
+$("pExcel").addEventListener("click", async function(){
+  var p = await sb.from("academy_personas").select("*").order("nombre").limit(20000);
+  if (p.error){ msg("pMsg", "err", esc(p.error.message)); return; }
+  var cuenta = {}, ultima = {};
+  per.list.forEach(function(x){ cuenta[x.persona_id] = (cuenta[x.persona_id] || 0) + 1; if (!ultima[x.persona_id] || x.fecha > ultima[x.persona_id]) ultima[x.persona_id] = x.fecha; });
+  var a1 = [["Nombre y apellido","Mail","Empresa","Cargo","Área","Tipo de puesto","Capacitaciones","Última capacitación","En la base desde"]];
+  p.data.forEach(function(x){ a1.push([x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", puestoDeTexto(x.cargo), cuenta[x.id] || 0, isoToAr(ultima[x.id] || ""), fmtTs(x.created_at)]); });
+  var f = personasFiltradas();
+  var a2 = [["Fecha","Nombre y apellido","Mail","Empresa","Cargo","Área","Calificación","Observaciones","Curso","Origen","Registrado"]];
+  f.forEach(function(x){ a2.push([isoToAr(x.fecha), x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", x.calificacion || "", x.observaciones || "",
+    (per.cursosDe[x.id] || []).map(cursoNombre).join(" / "), x.origen === "qr" ? "QR" : x.origen === "forms" ? "Forms" : "Excel", fmtTs(x.created_at)]); });
+  var wb = XLSX.utils.book_new();
+  var w1 = XLSX.utils.aoa_to_sheet(a1); w1["!cols"] = [{ wch: 30 }, { wch: 32 }, { wch: 26 }, { wch: 26 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 17 }]; w1["!autofilter"] = { ref: "A1:I" + a1.length };
+  var w2 = XLSX.utils.aoa_to_sheet(a2); w2["!cols"] = [{ wch: 11 }, { wch: 30 }, { wch: 32 }, { wch: 26 }, { wch: 26 }, { wch: 22 }, { wch: 12 }, { wch: 50 }, { wch: 40 }, { wch: 8 }, { wch: 17 }]; w2["!autofilter"] = { ref: "A1:K" + a2.length };
+  XLSX.utils.book_append_sheet(wb, w1, "Personas"); XLSX.utils.book_append_sheet(wb, w2, "Respuestas");
+  save("Base de personas - CLEAN SEA Academy - " + isoToAr(hoyAr()).replace(/\//g, "-") + ".xlsx", new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
+});
+per.canal = sb.channel("academy-respuestas")
+  .on("postgres_changes", { event: "*", schema: "public", table: "academy_respuestas" }, function(ev){
+    if (ev.eventType === "INSERT" && ev.new && ev.new.nombre) toast("Nueva respuesta: " + ev.new.nombre);
+    cargarPersonas();
+  }).subscribe();
 
-/* ── Pegar desde Excel: se copian las filas del curso (con la fila de títulos) y se pegan acá ── */
+/* ── Planillas anteriores (Forms o Excel) → base ── */
+// Fechas de texto: se decide día/mes o mes/día mirando toda la columna (Forms puede exportar 11/19/2026).
+function ordenFechas(valores){
+  var dm = 0, md = 0;
+  valores.forEach(function(v){ var m = typeof v === "string" && v.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{2,4}/); if (m){ if (+m[1] > 12) dm++; if (+m[2] > 12) md++; } });
+  return md > dm ? "md" : "dm";
+}
+function fechaIso(v, orden){
+  if (v == null || v === "") return "";
+  var z = function(n){ return String(n).padStart(2, "0"); };
+  if (v instanceof Date && !isNaN(v)) return v.getFullYear() + "-" + z(v.getMonth() + 1) + "-" + z(v.getDate());
+  if (typeof v === "number"){ var d = XLSX.SSF.parse_date_code(v); return d ? d.y + "-" + z(d.m) + "-" + z(d.d) : ""; }
+  var s = String(v).trim(), m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + "-" + z(m[2]) + "-" + z(m[3]);
+  if ((m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/))){
+    var a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+    var dia = orden === "md" ? b : a, mes = orden === "md" ? a : b;
+    if (mes > 12){ var t = dia; dia = mes; mes = t; }
+    return y + "-" + z(mes) + "-" + z(dia);
+  }
+  return "";
+}
+function califDe(v){
+  if (v == null || v === "") return null;
+  var n = typeof v === "number" ? Math.round(v) : /^\s*\d/.test(String(v)) ? parseInt(v, 10) : (String(v).match(/★/g) || []).length;
+  return n >= 1 && n <= 5 ? n : null;
+}
+function columnasForms(hdr){
+  var H = hdr.map(function(h){ return normKey(h); });
+  var find = function(re, skip){ for (var i = 0; i < H.length; i++){ if ((!skip || skip.indexOf(i) < 0) && re.test(H[i])) return i; } return -1; };
+  var col = {};
+  // La fecha de la capacitación es la pregunta "Fecha"; si no está, la hora de la respuesta.
+  col.fecha = find(/^fecha( de (la )?capacitacion| del curso)?:?$/);
+  if (col.fecha < 0) col.fecha = find(/^hora de finalizacion|^completion time|^hora de envio|^marca temporal|^timestamp/);
+  if (col.fecha < 0) col.fecha = find(/^hora de inicio|^start time|^fecha/);
+  // Forms agrega "Correo electrónico" y "Nombre" de la cuenta (suelen decir "anonymous"): se prefieren las preguntas.
+  var base = [find(/^correo electronico$|^email$/), find(/^nombre$|^name$/), find(/^id$/)].filter(function(i){ return i >= 0; });
+  col.nombreCompleto = find(/(nombre.*apellido|apellido.*nombre|nombre completo|full name)/);
+  col.apellido = col.nombreCompleto >= 0 ? -1 : find(/^apellidos?\b/);
+  col.nombre = col.nombreCompleto >= 0 ? -1 : find(/^nombres?\b/, base);
+  if (col.nombre < 0 && col.nombreCompleto < 0) col.nombre = find(/^nombres?:?$/);
+  col.email = find(/(mail|correo)/, base);
+  if (col.email < 0) col.email = find(/(mail|correo)/);
+  col.empresa = find(/(empresa|compan|organiz|company|razon social)/);
+  col.area = find(/(^area\b|\barea:?$|sector|departamento)/);
+  col.cargo = find(/(cargo|puesto|position|rol\b)/);
+  col.calificacion = find(/(califica|puntua|rating|valora)/);
+  col.observaciones = find(/(observacion|comentario|sugerencia)/);
+  return col;
+}
+function filasDesde(aoa, col, desde, fechaDefecto){
+  var orden = col.fecha >= 0 ? ordenFechas(aoa.slice(desde).map(function(r){ return r[col.fecha]; })) : "dm";
+  var out = [];
+  for (var r = desde; r < aoa.length; r++){
+    var row = aoa[r], get = function(i){ return i >= 0 ? C.clean(row[i]) : ""; };
+    var nombre = col.nombreCompleto >= 0 ? get(col.nombreCompleto) : C.clean(get(col.nombre) + " " + get(col.apellido));
+    var email = get(col.email).toLowerCase();
+    if (!nombre && !email) continue;
+    out.push({ fila: r + 1, fecha: (col.fecha >= 0 ? fechaIso(row[col.fecha], orden) : "") || fechaDefecto || "", nombre: nombrePropio(nombre), email: email,
+      empresa: get(col.empresa), cargo: get(col.cargo), area: get(col.area),
+      calificacion: col.calificacion >= 0 ? califDe(row[col.calificacion]) : null, observaciones: col.observaciones >= 0 ? String(row[col.observaciones] || "").trim() : "" });
+  }
+  return out;
+}
+async function leerPlanilla(file){
+  var buf = new Uint8Array(await file.arrayBuffer()), wb;
+  if (/\.csv$/i.test(file.name)){
+    var text = new TextDecoder("utf-8").decode(buf); if (text.indexOf("�") >= 0) text = new TextDecoder("windows-1252").decode(buf);
+    wb = XLSX.read(text.replace(/^﻿/, ""), { type: "string", cellDates: true });
+  } else wb = XLSX.read(buf, { type: "array", cellDates: true });
+  var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: true });
+  if (!aoa.length) throw new Error("La planilla está vacía.");
+  var col = columnasForms(aoa[0]);
+  if (col.email < 0) throw new Error("No encontré la columna del mail.");
+  if (col.nombre < 0 && col.nombreCompleto < 0) throw new Error("No encontré la columna del nombre.");
+  if (col.fecha < 0) throw new Error("No encontré la columna de la fecha.");
+  return { filas: filasDesde(aoa, col, 1), col: col };
+}
 // Texto copiado de Excel = filas por salto de línea, celdas por tabulador; una celda con saltos viene entre comillas.
 function parseTsv(t){
   var rows = [], row = [], cell = "", q = false;
@@ -976,50 +1008,131 @@ function parseTsv(t){
   if (cell !== "" || row.length){ row.push(cell); rows.push(row); }
   return rows.filter(function(r){ return r.some(function(x){ return C.clean(x); }); });
 }
-// Sin fila de títulos se asume el orden de la planilla: Nombre y Apellido | Empresa | Cargo | Área | Mail.
-function leerPegado(texto){
+// Sin fila de títulos se asume el orden de la planilla del Forms:
+// [Fecha] | Nombre y Apellido | Empresa | Cargo | Área | Mail | Calificación | Observaciones.
+function leerPegado(texto, fechaDefecto){
   var aoa = parseTsv(texto);
   if (!aoa.length) throw new Error("No hay nada pegado.");
   var col = columnasForms(aoa[0]);
   var conTitulos = col.email >= 0 && (col.nombre >= 0 || col.nombreCompleto >= 0) && !aoa[0].some(function(x){ return /@/.test(x); });
   if (!conTitulos){
-    var mail = aoa[0].findIndex(function(x){ return /@/.test(x); });
-    col = { nombreCompleto: 0, nombre: -1, apellido: -1, empresa: 1, puesto: 2, area: 3, email: mail >= 0 ? mail : 4 };
+    var d = fechaIso(aoa[0][0], "dm") ? 1 : 0;
+    col = { fecha: d ? 0 : -1, nombreCompleto: d, nombre: -1, apellido: -1, empresa: d + 1, cargo: d + 2, area: d + 3, email: d + 4, calificacion: d + 5, observaciones: d + 6 };
+    var mail = aoa[0].findIndex(function(x){ return /@/.test(x); }); if (mail >= 0) col.email = mail;
   }
-  var filas = [];
-  aoa.slice(conTitulos ? 1 : 0).forEach(function(row, k){
-    var get = function(i){ return i >= 0 ? C.clean(row[i]) : ""; };
-    var nombre = col.nombreCompleto >= 0 ? get(col.nombreCompleto) : C.clean(get(col.nombre) + " " + get(col.apellido));
-    var email = get(col.email).toLowerCase();
-    if (!nombre && !email) return;
-    filas.push({ fila: k + 1, nombre: nombre, email: email, empresa: get(col.empresa), area: get(col.area), puestoTexto: get(col.puesto), puesto: puestoDeTexto(get(col.puesto)) });
-  });
-  return { filas: filas, col: col, conTitulos: conTitulos };
+  return { filas: filasDesde(aoa, col, conTitulos ? 1 : 0, fechaDefecto), col: col, conTitulos: conTitulos };
 }
-$("cdPegar").addEventListener("click", async function(){
-  var c = cursoSel(); if (!c) return;
+async function importarABase(p, fuente, origen){
+  var validas = [], malas = [];
+  p.filas.forEach(function(x){
+    if (!x.fecha) malas.push("fila " + x.fila + " (sin fecha)");
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3) malas.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : ""));
+    else validas.push(x);
+  });
+  var fechas = validas.map(function(x){ return x.fecha; }).sort();
+  var vista = validas.slice(0, 8).map(function(x){ return "<tr><td class=\"mono\">" + esc(isoToAr(x.fecha)) + "</td><td>" + esc(x.nombre) + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa || "Sin empresa") + "</td><td>" + esc(x.cargo) + "</td><td>" + estrellas(x.calificacion) + "</td></tr>"; }).join("");
+  $("modal").querySelector(".box").classList.add("wide");
+  var ok = await modal("Cargar en la base",
+    "<p>" + esc(fuente) + ": <b>" + p.filas.length + "</b> filas" + (p.conTitulos === false ? " (sin fila de títulos: se usó el orden Fecha, Nombre y Apellido, Empresa, Cargo, Área, Mail, Calificación, Observaciones)" : "") + ".</p>" +
+    "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + validas.length + "</b> válidas" + (fechas.length ? ", del " + esc(isoToAr(fechas[0])) + " al " + esc(isoToAr(fechas[fechas.length - 1])) : "") + ". Las que ya están en la base (mismo mail y fecha) no se tocan.</li>" +
+    (malas.length ? "<li>" + malas.length + " se omiten por falta de fecha, mail o nombre (" + esc(malas.slice(0, 5).join(", ")) + (malas.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" +
+    (vista ? '<div class="tablebox" style="max-height:240px;margin-bottom:8px"><table style="min-width:0;font-size:12.5px"><thead><tr><th>Fecha</th><th>Nombre</th><th>Mail</th><th>Empresa</th><th>Cargo</th><th>Calif.</th></tr></thead><tbody>' + vista + "</tbody></table></div>" + (validas.length > 8 ? '<p class="muted" style="font-size:12.5px">… y ' + (validas.length - 8) + " más.</p>" : "") : "") +
+    (p.col.empresa < 0 ? '<div class="msg warn">No vino la columna Empresa: quedan como «Sin empresa».</div>' : ""),
+    [{ label: "Cancelar", value: false }, { label: "Cargar " + validas.length, value: true, primary: true }]);
+  $("modal").querySelector(".box").classList.remove("wide");
+  if (!ok || !validas.length) return;
+  var tot = { nuevas: 0, existentes: 0, errores: [] };
+  for (var i = 0; i < validas.length; i += 1000){
+    msg("pImpMsg", "info", "Cargando " + Math.min(i + 1000, validas.length) + " de " + validas.length + "…");
+    var r = await sb.rpc("academy_importar", { p_filas: validas.slice(i, i + 1000).map(function(x){ return Object.assign({ origen: origen }, x, { observaciones: x.observaciones || null }); }) });
+    if (r.error){ msg("pImpMsg", "err", "No se pudo cargar: " + esc(r.error.message)); return; }
+    tot.nuevas += r.data.nuevas; tot.existentes += r.data.existentes; tot.errores = tot.errores.concat(r.data.errores || []);
+  }
+  msg("pImpMsg", tot.errores.length ? "warn" : "ok", tot.nuevas + " respuestas nuevas en la base" + (tot.existentes ? "; " + tot.existentes + " ya estaban" : "") + "." +
+    (tot.errores.length ? "<br>Con error: " + esc(tot.errores.slice(0, 5).map(function(x){ return "fila " + x.fila + ": " + x.error; }).join("; ")) : ""));
+  cargarPersonas();
+}
+$("pArchivo").addEventListener("change", async function(e){
+  var f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { msg("pImpMsg", "info", "Leyendo «" + esc(f.name) + "»…"); var p = await leerPlanilla(f); msg("pImpMsg", "", ""); await importarABase(p, "«" + f.name + "»", "forms"); }
+  catch(err){ msg("pImpMsg", "err", esc(err.message)); }
+});
+$("pPegar").addEventListener("click", async function(){
   var ok = await modal("Pegar desde Excel",
-    "<p>En la planilla seleccioná las filas de este curso <b>junto con la fila de títulos</b> (Nombre y Apellido, Empresa, Cargo, Área, Mail), copiá con Ctrl+C y pegá acá con Ctrl+V.</p>" +
-    '<textarea id="pgTxt" rows="8" style="width:100%;font:12px ui-monospace,Consolas,monospace;white-space:pre;resize:vertical" placeholder="Pegá acá (Ctrl+V)" aria-label="Filas copiadas de Excel"></textarea>',
+    "<p>Seleccioná las filas en la planilla <b>junto con la fila de títulos</b>, copiá con Ctrl+C y pegá acá con Ctrl+V.</p>" +
+    '<textarea id="pgTxt" rows="8" style="width:100%;font:12px ui-monospace,Consolas,monospace;white-space:pre;resize:vertical" placeholder="Pegá acá (Ctrl+V)" aria-label="Filas copiadas de Excel"></textarea>' +
+    '<label class="muted" style="display:block;margin-top:8px;font-size:13px">Fecha de la capacitación, si las filas no la traen: <input type="date" id="pgFecha" style="width:auto"></label>',
     [{ label: "Cancelar", value: false }, { label: "Revisar", value: true, primary: true }]);
-  var texto = $("pgTxt") ? $("pgTxt").value : "";
+  var texto = $("pgTxt") ? $("pgTxt").value : "", fd = $("pgFecha") ? $("pgFecha").value : "";
   if (!ok) return;
-  try {
-    var p = leerPegado(texto);
-    if (!p.filas.length){ msg("cdMsg", "warn", "No encontré personas en lo que pegaste."); return; }
-    await confirmarEImportar(c, p.filas, { titulo: "Pegar desde Excel", origen: "manual", fuente: "Excel",
-      intro: "Pegaste <b>" + p.filas.length + "</b> " + (p.filas.length === 1 ? "persona" : "personas") + (p.conTitulos ? "." : ". No vino la fila de títulos: usé el orden Nombre y Apellido, Empresa, Cargo, Área, Mail."),
-      sinColEmpresa: p.col.empresa < 0 ? "No vino la columna Empresa: quedan como «Sin empresa»." : "", sinColPuesto: p.col.puesto < 0 });
-  } catch(err){ msg("cdMsg", "err", esc(err.message)); }
+  try { var p = leerPegado(texto, fd); if (!p.filas.length){ msg("pImpMsg", "warn", "No encontré personas en lo que pegaste."); return; } await importarABase(p, "Lo pegado", "excel"); }
+  catch(err){ msg("pImpMsg", "err", esc(err.message)); }
+});
+
+/* ── Curso: elegir participantes de la base ── */
+$("cdAgregar").addEventListener("click", async function(){
+  var c = cursoSel(); if (!c) return;
+  await cargarPersonas();
+  var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); }));
+  var marcados = new Set();
+  $("modal").querySelector(".box").classList.add("wide");
+  var pr = modal("Elegir participantes de la base",
+    "<p><b>Curso:</b> " + esc(c.titulo) + " · " + esc(isoToAr(c.fecha)) + "</p>" +
+    '<div class="toolbar"><label class="muted" style="font-size:13px">Fecha <input type="date" id="elFecha" style="width:auto" value="' + esc(c.fecha) + '"></label>' +
+    '<label class="muted" style="font-size:13px"><input type="checkbox" id="elTodas"> Todas las fechas</label>' +
+    '<input type="search" id="elBuscar" placeholder="Buscar…" aria-label="Buscar en la base"></div>' +
+    '<div class="tablebox" style="max-height:min(52vh,460px)"><table style="min-width:0;font-size:13px"><thead><tr><th class="chk"><input type="checkbox" id="elAll" aria-label="Marcar todos"></th><th>Fecha</th><th>Nombre y apellido</th><th>Mail</th><th>Empresa</th><th>Cargo</th><th>Calif.</th></tr></thead><tbody id="elBody"></tbody></table></div>',
+    [{ label: "Cancelar", value: false }, { label: "Agregar 0 al curso", value: true, primary: true }]);
+  var btn = $("mdBtns").lastChild;
+  function visibles(){ return filtrarRespuestas(per.list, $("elTodas").checked ? "" : $("elFecha").value, $("elBuscar").value); }
+  function pintar(){
+    var v = visibles();
+    $("elBody").innerHTML = v.length ? v.slice(0, 800).map(function(x){
+      var esta = ya.has(x.email.toLowerCase());
+      return '<tr data-r="' + x.id + '"' + (esta ? ' style="opacity:.5"' : "") + '><td class="chk"><input type="checkbox"' + (esta ? " disabled checked" : marcados.has(x.id) ? " checked" : "") + ' aria-label="Elegir ' + esc(x.nombre) + '"></td><td class="mono">' + esc(isoToAr(x.fecha)) +
+        "</td><td>" + esc(x.nombre) + (esta ? ' <span class="pill ok">ya está</span>' : "") + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + estrellas(x.calificacion) + "</td></tr>";
+    }).join("") : '<tr><td colspan="7" class="empty">' + ($("elTodas").checked ? "No hay respuestas con esa búsqueda." : "Nadie se registró con fecha " + esc(isoToAr($("elFecha").value)) + ". Probá con «Todas las fechas».") + "</td></tr>";
+    var libres = v.filter(function(x){ return !ya.has(x.email.toLowerCase()); });
+    $("elAll").checked = libres.length > 0 && libres.every(function(x){ return marcados.has(x.id); });
+    btn.textContent = "Agregar " + marcados.size + " al curso"; btn.disabled = !marcados.size;
+  }
+  $("elBody").addEventListener("change", function(e){
+    var tr = e.target.closest("tr[data-r]"); if (!tr) return;
+    var x = per.list.find(function(y){ return y.id === tr.dataset.r; });
+    if (e.target.checked){
+      // Una sola respuesta por mail dentro del curso.
+      per.list.forEach(function(y){ if (y.email === x.email) marcados.delete(y.id); });
+      marcados.add(x.id);
+    } else marcados.delete(x.id);
+    pintar();
+  });
+  $("elAll").addEventListener("change", function(e){
+    visibles().forEach(function(x){ if (ya.has(x.email.toLowerCase())) return; if (e.target.checked){ if (!Array.from(marcados).some(function(id){ var y = per.list.find(function(z){ return z.id === id; }); return y && y.email === x.email; })) marcados.add(x.id); } else marcados.delete(x.id); });
+    pintar();
+  });
+  ["elFecha", "elTodas"].forEach(function(id){ $(id).addEventListener("change", pintar); });
+  $("elBuscar").addEventListener("input", pintar);
+  pintar();
+  var ok = await pr;
+  $("modal").querySelector(".box").classList.remove("wide");
+  if (!ok || !marcados.size) return;
+  var filas = per.list.filter(function(x){ return marcados.has(x.id); }).map(function(x){
+    return { curso_id: c.id, nombre: x.nombre, email: x.email, empresa: x.empresa, area: x.area, cargo: x.cargo, puesto: puestoDeTexto(x.cargo),
+      origen: "base", persona_id: x.persona_id, respuesta_id: x.id, respondido_at: x.created_at };
+  });
+  var r = await sb.from("academy_inscripciones").insert(filas);
+  if (r.error){ msg("cdMsg", "err", "No se pudieron agregar: " + esc(r.error.message)); return; }
+  msg("cdMsg", "ok", filas.length + (filas.length === 1 ? " participante agregado" : " participantes agregados") + ". Revisá los nombres y tocá «Enviar diplomas por mail».");
+  cargarInscriptos(); cargarPersonas();
 });
 
 $("cdExcel").addEventListener("click", function(){
   var c = cursoSel(); if (!c) return;
-  var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Área","Tipo de puesto","Origen","Inscripto","Diploma enviado"]];
-  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", x.origen === "forms" ? "Forms" : x.origen === "manual" ? "Excel" : "QR", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
+  var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Cargo","Área","Tipo de puesto","Calificación","Observaciones","Registrado","Diploma enviado"]];
+  cur.ins.forEach(function(x, i){ var rs = x.respuesta || {}; aoa.push([i + 1, x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", x.puesto || "", rs.calificacion || "", rs.observaciones || "", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 8 }, { wch: 17 }, { wch: 17 }];
-  ws["!autofilter"] = { ref: "A1:I" + aoa.length };
+  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 26 }, { wch: 24 }, { wch: 22 }, { wch: 12 }, { wch: 46 }, { wch: 17 }, { wch: 17 }];
+  ws["!autofilter"] = { ref: "A1:K" + aoa.length };
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inscriptos");
   save("Inscriptos - " + C.shortCourse(c.titulo, 50) + " - " + isoToAr(c.fecha).replace(/\//g, "-") + ".xlsx", new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
 });
@@ -1088,7 +1201,7 @@ async function enviarDiplomas(set){
   cargarInscriptos();
 }
 
-cargarCursos();
+cargarCursos().then(cargarPersonas);
 
 /* ── Inicio ── */
 updShortHint(); refresh(); indPreview(); showTab("cur");

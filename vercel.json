@@ -1,5 +1,5 @@
 {
-  "rewrites": [{ "source": "/i/:token", "destination": "/inscripcion.html" }],
+  "rewrites": [{ "source": "/registro", "destination": "/inscripcion.html" }, { "source": "/i/:token", "destination": "/inscripcion.html" }],
   "headers": [
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },

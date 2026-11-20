@@ -173,3 +173,6 @@ body{background:var(--bg)}
 #cdBody td:nth-child(4) input{min-width:200px}
 #cdBody td:nth-child(5) input{min-width:130px}
 #cdBody td:nth-child(6) input{min-width:150px}
+.modal .box.wide{max-width:920px}
+.stars-txt{color:#C98A00;letter-spacing:1px;white-space:nowrap}
+.obs{font-size:12.5px;max-width:280px;white-space:normal}
