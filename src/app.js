@@ -736,6 +736,7 @@ function renderCursoDetalle(){
   else tb.innerHTML = cur.ins.map(function(x, i){
     var st = cur.status[x.id], pills = st ? statusHtml(st) : "";
     if (x.diploma_enviado_at) pills = '<span class="pill ok">Diploma enviado ' + esc(fmtFH(x.diploma_enviado_at)) + "</span>" + (st && st.errs.length ? pills : "");
+    if (x.origen === "forms") pills += '<span class="pill" title="Importado de Microsoft Forms">Forms</span>';
     return '<tr data-i="' + x.id + '"' + (cur.sel.has(x.id) ? ' class="sel"' : "") + '><td class="chk"><input type="checkbox" data-csel' + (cur.sel.has(x.id) ? " checked" : "") + ' aria-label="Seleccionar ' + esc(x.nombre) + '"></td>' +
       '<td class="num">' + (i + 1) + "</td>" +
       '<td><input type="text" data-cf="nombre" value="' + esc(x.nombre) + '" aria-label="Nombre"></td>' +
@@ -818,13 +819,141 @@ $("cdMasivo").addEventListener("click", async function(){
   msg("impMsg", "info", "Cargados " + set.length + " inscriptos del curso. Desde acá podés generar el ZIP por empresa.");
 });
 
+/* ── Importar respuestas de Microsoft Forms ──
+   El QR del instructor es siempre el mismo y lleva a un Forms; las respuestas de todos los cursos
+   caen en una planilla maestra. Cada curso tiene una fecha única: se toman las respuestas de ese día. */
+var PUESTOS = ["Director/Gerente","Jefe","Supervisor","Coordinador","Analista/Administrativo","Operador","Otro"];
+function puestoDeTexto(t){
+  var k = normKey(t || "");
+  if (!k) return "Otro";
+  var exacto = PUESTOS.find(function(p){ return normKey(p) === k; }); if (exacto) return exacto;
+  if (/gerent|director|manager|gte\b/.test(k)) return "Director/Gerente";
+  if (/\bjef|\bhead\b|chief/.test(k)) return "Jefe";
+  if (/superv/.test(k)) return "Supervisor";
+  if (/coordin/.test(k)) return "Coordinador";
+  if (/analist|administr|office|staff|asistent|tecnic|ingenier|especialist|auxiliar/.test(k)) return "Analista/Administrativo";
+  if (/operari|operador|operat|maquinist|marin|tripul|marinero|ayudante/.test(k)) return "Operador";
+  return "Otro";
+}
+function fechaIso(v){
+  if (v == null || v === "") return "";
+  var z = function(n){ return String(n).padStart(2, "0"); };
+  if (v instanceof Date && !isNaN(v)) return v.getFullYear() + "-" + z(v.getMonth() + 1) + "-" + z(v.getDate());
+  if (typeof v === "number"){ var d = XLSX.SSF.parse_date_code(v); return d ? d.y + "-" + z(d.m) + "-" + z(d.d) : ""; }
+  var s = String(v).trim(), m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + "-" + z(m[2]) + "-" + z(m[3]);
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))){
+    var a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+    var dia = a > 12 ? a : b > 12 ? b : a, mes = a > 12 ? b : b > 12 ? a : b; // ambiguo: se asume día/mes
+    return y + "-" + z(mes) + "-" + z(dia);
+  }
+  return "";
+}
+function horaTs(v){
+  if (v instanceof Date && !isNaN(v)) return v.toISOString();
+  return null;
+}
+function columnasForms(hdr){
+  var H = hdr.map(function(h){ return normKey(h); });
+  var find = function(re, skip){ for (var i = 0; i < H.length; i++){ if ((!skip || skip.indexOf(i) < 0) && re.test(H[i])) return i; } return -1; };
+  var col = {};
+  col.fecha = find(/^hora de finalizacion|^completion time|^hora de envio|^marca temporal|^timestamp/);
+  if (col.fecha < 0) col.fecha = find(/^hora de inicio|^start time|^fecha/);
+  // Forms agrega "Correo electrónico" y "Nombre" de la cuenta (suelen decir "anonymous"): se prefieren las preguntas.
+  var base = [find(/^correo electronico$|^email$/), find(/^nombre$|^name$/), find(/^id$/)].filter(function(i){ return i >= 0; });
+  col.nombreCompleto = find(/(nombre.*apellido|apellido.*nombre|nombre completo|full name)/);
+  col.apellido = col.nombreCompleto >= 0 ? -1 : find(/^apellidos?\b/);
+  col.nombre = col.nombreCompleto >= 0 ? -1 : find(/^nombres?\b/, base);
+  if (col.nombre < 0 && col.nombreCompleto < 0) col.nombre = find(/^nombres?$/);
+  col.email = find(/(mail|correo)/, base);
+  if (col.email < 0) col.email = find(/(mail|correo)/);
+  col.empresa = find(/(empresa|compan|organiz|company)/);
+  col.area = find(/(^area\b|\barea$|sector|departamento)/);
+  col.puesto = find(/(puesto|cargo|position|rol\b)/);
+  return col;
+}
+async function leerForms(file){
+  var buf = new Uint8Array(await file.arrayBuffer()), wb;
+  if (/\.csv$/i.test(file.name)){
+    var text = new TextDecoder("utf-8").decode(buf); if (text.indexOf("�") >= 0) text = new TextDecoder("windows-1252").decode(buf);
+    wb = XLSX.read(text.replace(/^﻿/, ""), { type: "string", cellDates: true });
+  } else wb = XLSX.read(buf, { type: "array", cellDates: true });
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
+  if (!aoa.length) throw new Error("La planilla está vacía.");
+  var col = columnasForms(aoa[0]);
+  if (col.fecha < 0) throw new Error("No encontré la columna de fecha de la respuesta (\"Hora de finalización\" o \"Hora de inicio\").");
+  if (col.email < 0) throw new Error("No encontré la columna del mail.");
+  if (col.nombre < 0 && col.nombreCompleto < 0) throw new Error("No encontré la columna del nombre.");
+  var out = [];
+  for (var r = 1; r < aoa.length; r++){
+    var row = aoa[r], get = function(i){ return i >= 0 ? C.clean(row[i]) : ""; };
+    var nombre = col.nombreCompleto >= 0 ? get(col.nombreCompleto) : C.clean(get(col.nombre) + " " + get(col.apellido));
+    var email = get(col.email).toLowerCase();
+    if (!nombre && !email) continue;
+    out.push({ fila: r + 1, fecha: fechaIso(row[col.fecha]), hora: horaTs(row[col.fecha]), nombre: nombre, email: email,
+      empresa: get(col.empresa), area: get(col.area), puestoTexto: get(col.puesto), puesto: puestoDeTexto(get(col.puesto)) });
+  }
+  return { filas: out, col: col, hoja: wb.SheetNames[0], encabezados: aoa[0] };
+}
+// "PEREZ JUAN" / "juan perez" → "Perez Juan" / "Juan Perez" (mismo criterio que el formulario del QR).
+function nombrePropio(s){
+  var MIN = ["de","del","la","las","los","y","da","das","do","dos","van","von","di"];
+  return C.clean(s).split(" ").filter(Boolean).map(function(w, i){
+    var mezclada = w !== w.toLowerCase() && w !== w.toUpperCase() && w.slice(1) !== w.slice(1).toLowerCase();
+    if (mezclada) return w;
+    var low = w.toLowerCase(); if (i > 0 && MIN.indexOf(low) >= 0) return low;
+    return low.split("-").map(function(p){ return p.charAt(0).toUpperCase() + p.slice(1); }).join("-");
+  }).join(" ");
+}
+$("cdForms").addEventListener("change", async function(e){
+  var f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  var c = cursoSel(); if (!c) return;
+  try {
+    msg("cdMsg", "info", "Leyendo «" + esc(f.name) + "»…");
+    var p = await leerForms(f);
+    var delDia = p.filas.filter(function(x){ return x.fecha === c.fecha; });
+    if (!delDia.length){
+      var porFecha = {}; p.filas.forEach(function(x){ if (x.fecha) porFecha[x.fecha] = (porFecha[x.fecha] || 0) + 1; });
+      var fechas = Object.keys(porFecha).sort().reverse().slice(0, 8).map(function(d){ return isoToAr(d) + " (" + porFecha[d] + ")"; });
+      msg("cdMsg", "warn", "La planilla no tiene respuestas del " + esc(isoToAr(c.fecha)) + ", la fecha del curso." + (fechas.length ? " Fechas con respuestas: " + esc(fechas.join(", ")) + "." : ""));
+      return;
+    }
+    var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); })), vistos = new Set();
+    var nuevos = [], repetidos = 0, invalidos = [];
+    delDia.forEach(function(x){
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3){ invalidos.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : "")); return; }
+      if (ya.has(x.email) || vistos.has(x.email)){ repetidos++; return; }
+      vistos.add(x.email); nuevos.push(x);
+    });
+    var sinEmpresa = nuevos.filter(function(x){ return !x.empresa; }).length;
+    var ok = await modal("Importar respuestas de Forms",
+      "<p><b>Curso:</b> " + esc(c.titulo) + "<br><b>Fecha:</b> " + esc(isoToAr(c.fecha)) + "</p>" +
+      "<p>La planilla tiene " + p.filas.length + " respuestas; <b>" + delDia.length + "</b> son de esta fecha.</p>" +
+      "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + nuevos.length + "</b> se agregan como inscriptos</li>" +
+      (repetidos ? "<li>" + repetidos + " ya estaban (mismo mail): no se tocan</li>" : "") +
+      (invalidos.length ? "<li>" + invalidos.length + " sin mail o nombre válido: se omiten (" + esc(invalidos.slice(0, 5).join(", ")) + (invalidos.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" +
+      (p.col.empresa < 0 ? '<div class="msg warn">La planilla no tiene columna de empresa: quedan como «Sin empresa» y se pueden corregir en la tabla. Conviene agregar la pregunta Empresa al Forms.</div>' :
+        sinEmpresa ? '<div class="msg warn">' + sinEmpresa + " respuestas no tienen empresa: quedan como «Sin empresa».</div>" : "") +
+      (p.col.puesto < 0 ? '<div class="msg warn">No hay columna de puesto: quedan como «Otro».</div>' : ""),
+      [{ label: "Cancelar", value: false }, { label: "Importar " + nuevos.length, value: true, primary: true }]);
+    if (!ok || !nuevos.length){ msg("cdMsg", "", ""); return; }
+    var filas = nuevos.map(function(x){ return { curso_id: c.id, nombre: nombrePropio(x.nombre).slice(0, 120), email: x.email.slice(0, 200),
+      empresa: (x.empresa || "Sin empresa").slice(0, 120), area: x.area ? x.area.slice(0, 120) : null, puesto: x.puesto, origen: "forms", respondido_at: x.hora }; });
+    var r = await sb.from("academy_inscripciones").insert(filas);
+    if (r.error){ msg("cdMsg", "err", "No se pudo importar: " + esc(r.error.message)); return; }
+    msg("cdMsg", "ok", nuevos.length + " inscriptos importados desde «" + esc(f.name) + "». Revisá nombres y empresas antes de enviar los diplomas.");
+    cargarInscriptos();
+  } catch(err){ msg("cdMsg", "err", esc(err.message)); }
+});
+
 $("cdExcel").addEventListener("click", function(){
   var c = cursoSel(); if (!c) return;
-  var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Área","Tipo de puesto","Inscripto","Diploma enviado"]];
-  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", fmtFH(x.created_at), fmtFH(x.diploma_enviado_at)]); });
+  var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Área","Tipo de puesto","Origen","Inscripto","Diploma enviado"]];
+  cur.ins.forEach(function(x, i){ aoa.push([i + 1, x.nombre, x.email, x.empresa, x.area || "", x.puesto || "", x.origen === "forms" ? "Forms" : "QR", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 17 }, { wch: 17 }];
-  ws["!autofilter"] = { ref: "A1:H" + aoa.length };
+  ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 30 }, { wch: 22 }, { wch: 8 }, { wch: 17 }, { wch: 17 }];
+  ws["!autofilter"] = { ref: "A1:I" + aoa.length };
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inscriptos");
   save("Inscriptos - " + C.shortCourse(c.titulo, 50) + " - " + isoToAr(c.fecha).replace(/\//g, "-") + ".xlsx", new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
 });
