@@ -665,14 +665,18 @@ function renderCursos(){
   $("tabCur").textContent = cur.list.length;
   var box = $("cList");
   if (!cur.list.length){ box.innerHTML = '<div class="empty"><h3>Todavía no hay cursos</h3><p style="margin:0">Creá el curso con su título y fecha. Después elegí de la base a quién darle el diploma.</p></div>'; }
-  else box.innerHTML = '<table><thead><tr><th>Fecha</th><th>Curso</th><th>Participantes</th></tr></thead><tbody>' +
+  else box.innerHTML = '<table><thead><tr><th>Fecha</th><th>Curso</th><th>Participantes</th><th></th></tr></thead><tbody>' +
     cur.list.map(function(c){
       return '<tr data-c="' + c.id + '" class="' + (c.id === cur.id ? "sel" : "") + '" style="cursor:pointer"><td class="mono">' + esc(isoToAr(c.fecha)) + "</td><td>" + esc(c.titulo) + (c.lugar ? '<div class="muted" style="font-size:12px">' + esc(c.lugar) + "</div>" : "") +
-        '</td><td class="mono">' + (cur.counts[c.id] || 0) + "</td></tr>";
+        '</td><td class="mono">' + (cur.counts[c.id] || 0) + '</td><td class="act"><button class="btn ghost danger" type="button" data-cborrar title="Eliminar curso">Eliminar</button></td></tr>';
     }).join("") + "</tbody></table>";
   renderCursoDetalle();
 }
-$("cList").addEventListener("click", function(e){ var tr = e.target.closest("tr[data-c]"); if (tr) abrirCurso(tr.dataset.c); });
+$("cList").addEventListener("click", function(e){
+  var tr = e.target.closest("tr[data-c]"); if (!tr) return;
+  if (e.target.closest("[data-cborrar]")){ eliminarCurso(tr.dataset.c); return; }
+  abrirCurso(tr.dataset.c);
+});
 
 $("cForm").addEventListener("submit", async function(e){
   e.preventDefault();
@@ -715,6 +719,7 @@ async function validarInscriptos(){
     if (bad.length) errs.push("Caracteres no admitidos: " + bad.join(" "));
     else { var k = await C.check(x.nombre, null); if (!k.name.fits) errs.push("Nombre demasiado largo"); else if (k.name.lines > 1) warns.push("Nombre en 2 líneas"); }
     if (x.nombre.split(" ").length < 2) warns.push("Sólo una palabra");
+    if (!x.email) warns.push("Sin mail");
     cur.status[x.id] = { errs: errs, warns: warns, dup: groups[normKey(x.nombre)].length > 1 };
   }
 }
@@ -737,7 +742,7 @@ function renderCursoDetalle(){
     return '<tr data-i="' + x.id + '"' + (cur.sel.has(x.id) ? ' class="sel"' : "") + '><td class="chk"><input type="checkbox" data-csel' + (cur.sel.has(x.id) ? " checked" : "") + ' aria-label="Seleccionar ' + esc(x.nombre) + '"></td>' +
       '<td class="num">' + (i + 1) + "</td>" +
       '<td><input type="text" data-cf="nombre" value="' + esc(x.nombre) + '" aria-label="Nombre"></td>' +
-      '<td><input type="email" data-cf="email" value="' + esc(x.email) + '" aria-label="Mail"></td>' +
+      '<td><input type="email" data-cf="email" value="' + esc(x.email || "") + '" placeholder="Falta el mail" aria-label="Mail"></td>' +
       '<td><input type="text" data-cf="empresa" value="' + esc(x.empresa) + '" aria-label="Empresa"></td>' +
       '<td><input type="text" data-cf="area" value="' + esc(x.area || "") + '" aria-label="Área"></td>' +
       '<td style="font-size:12.5px">' + esc(x.cargo || x.puesto || "") + "</td>" +
@@ -753,7 +758,14 @@ $("cdBody").addEventListener("change", async function(e){
   if (e.target.matches("[data-csel]")){ if (e.target.checked) cur.sel.add(x.id); else cur.sel.delete(x.id); tr.classList.toggle("sel", e.target.checked); $("ckSel").textContent = cur.sel.size; return; }
   var f = e.target.dataset.cf; if (!f) return;
   var v = f === "email" ? e.target.value.trim().toLowerCase() : C.clean(e.target.value);
-  if (!v){ e.target.value = x[f]; return; }
+  if (!v){ e.target.value = x[f] || ""; return; }
+  if (f === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ msg("cdMsg", "err", "Revisá el mail de " + esc(x.nombre) + "."); e.target.value = x[f] || ""; return; }
+  if (f === "email" && x.persona_id && !x.email){
+    // Completar el mail en el curso también lo completa en la base de personas.
+    var rm = await sb.rpc("academy_completar_mail", { p_persona: x.persona_id, p_email: v });
+    if (rm.error){ msg("cdMsg", "err", esc(rm.error.code === "P0001" ? rm.error.message : "No se pudo guardar: " + rm.error.message)); e.target.value = ""; return; }
+    cargarInscriptos(); cargarPersonas(); return;
+  }
   var patch = {}; patch[f] = v; patch.updated_at = new Date().toISOString();
   var r = await sb.from("academy_inscripciones").update(patch).eq("id", x.id);
   if (r.error){ msg("cdMsg", "err", "No se pudo guardar: " + esc(r.error.message)); e.target.value = x[f]; return; }
@@ -765,12 +777,12 @@ $("cdBody").addEventListener("click", async function(e){
   var x = cur.ins.find(function(y){ return y.id === tr.dataset.i; }); if (!x) return;
   var c = cursoSel();
   if (e.target.closest("[data-cver]")){
-    try { var g = await C.generate({ name: x.nombre, title: c.titulo, date: isoToAr(c.fecha), preview: true }); await renderPdf($("cdCanvas"), g.bytes); $("cdPrev").hidden = false; $("cdPrevCap").innerHTML = "<b>" + esc(x.nombre) + "</b> · " + esc(x.email) + " " + notesHtml(g.info); $("cdPrev").scrollIntoView({ block: "nearest" }); }
+    try { var g = await C.generate({ name: x.nombre, title: c.titulo, date: isoToAr(c.fecha), preview: true }); await renderPdf($("cdCanvas"), g.bytes); $("cdPrev").hidden = false; $("cdPrevCap").innerHTML = "<b>" + esc(x.nombre) + "</b> · " + mailHtml(x) + " " + notesHtml(g.info); $("cdPrev").scrollIntoView({ block: "nearest" }); }
     catch(err){ msg("cdMsg", "err", esc(err.message)); }
   }
   if (e.target.closest("[data-cenv]")) enviarDiplomas([x]);
   if (e.target.closest("[data-cdel]")){
-    var ok = await modal("Quitar inscripto", "<p>Se borra a <b>" + esc(x.nombre) + "</b> (" + esc(x.email) + ") de este curso. No se puede deshacer.</p>", [{ label: "Cancelar", value: false }, { label: "Quitar", value: true, primary: true }]);
+    var ok = await modal("Quitar inscripto", "<p>Se borra a <b>" + esc(x.nombre) + "</b> (" + esc(mailTxt(x)) + ") de este curso. No se puede deshacer.</p>", [{ label: "Cancelar", value: false }, { label: "Quitar", value: true, primary: true }]);
     if (!ok) return;
     var r = await sb.from("academy_inscripciones").delete().eq("id", x.id);
     if (r.error) msg("cdMsg", "err", esc(r.error.message)); else { cur.sel.delete(x.id); cargarInscriptos(); }
@@ -854,6 +866,9 @@ async function cargarPersonas(){
   $("tabPer").textContent = per.list.length;
   if (!$("p-per").hidden) renderPersonas();
 }
+var SIN_MAIL = '<span class="pill warn">Sin mail</span>';
+function mailHtml(x){ return x.email ? esc(x.email) : SIN_MAIL; }
+function mailTxt(x){ return x.email || "sin mail"; }
 function cursoNombre(id){ var c = cur.list.find(function(x){ return x.id === id; }); return c ? c.titulo : "(curso)"; }
 function textoBusqueda(x){ return normKey([x.nombre, x.email, x.empresa, x.cargo, x.area, x.observaciones].join(" ")); }
 function filtrarRespuestas(lista, fecha, q){
@@ -864,7 +879,7 @@ function personasFiltradas(){ return filtrarRespuestas(per.list, $("pFecha").val
 function renderPersonas(){
   pintarQrFijo();
   var f = personasFiltradas();
-  var pers = new Set(f.map(function(x){ return x.email; })), emps = new Set(f.map(function(x){ return normKey(x.empresa); }));
+  var pers = new Set(f.map(function(x){ return x.persona_id; })), emps = new Set(f.map(function(x){ return normKey(x.empresa); }));
   var cal = f.filter(function(x){ return x.calificacion; });
   var hoy = hoyAr();
   $("pkResp").textContent = f.length; $("pkPers").textContent = pers.size; $("pkEmp").textContent = emps.size;
@@ -875,16 +890,33 @@ function renderPersonas(){
   tb.innerHTML = f.slice(0, 1500).map(function(x){
     var cs = (per.cursosDe[x.id] || []).map(function(id){ return '<span class="pill ok" title="' + esc(cursoNombre(id)) + '">' + esc(C.shortCourse(cursoNombre(id), 22)) + "</span>"; }).join("");
     return '<tr data-r="' + x.id + '"><td class="mono">' + esc(isoToAr(x.fecha)) + "</td><td>" + esc(x.nombre) + (x.origen !== "qr" ? ' <span class="pill" title="Importado">' + (x.origen === "forms" ? "Forms" : "Excel") + "</span>" : "") +
-      "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + esc(x.area || "") + "</td><td>" + estrellas(x.calificacion) +
+      "</td><td>" + (x.email ? esc(x.email) + ' <button class="btn ghost" type="button" data-rmail title="Corregir el mail" aria-label="Corregir el mail">✎</button>' : '<button class="btn" type="button" data-rmail>Agregar mail</button>') + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + esc(x.area || "") + "</td><td>" + estrellas(x.calificacion) +
       '</td><td class="obs">' + esc(x.observaciones || "") + "</td><td>" + cs + '</td><td class="act"><button class="btn ghost danger" type="button" data-rdel>Borrar</button></td></tr>';
   }).join("") + (f.length > 1500 ? '<tr><td colspan="10" class="muted">Se muestran 1500 de ' + f.length + ". Filtrá por fecha o buscá para ver el resto (el Excel trae todo).</td></tr>" : "");
 }
 $("pFecha").addEventListener("change", renderPersonas);
 $("pBuscar").addEventListener("input", renderPersonas);
+async function completarMail(x){
+  var pr = modal(x.email ? "Corregir mail" : "Agregar mail",
+    "<p><b>" + esc(x.nombre) + "</b> · " + esc(x.empresa) + "</p>" +
+    '<input type="email" id="cmMail" inputmode="email" autocomplete="off" placeholder="nombre@empresa.com" value="' + esc(x.email || "") + '" aria-label="Mail" style="width:100%">' +
+    '<p class="muted" style="font-size:12.5px;margin:8px 0 0">Si ese mail ya está en la base (por ejemplo, porque la persona después se registró con el QR), se unifican en una sola persona. En los cursos donde ya se le envió el diploma no cambia.</p>',
+    [{ label: "Cancelar", value: false }, { label: "Guardar", value: true, primary: true }]);
+  var inp = $("cmMail"); if (inp) inp.focus();
+  var ok = await pr;
+  var v = inp ? inp.value.trim().toLowerCase() : "";
+  if (!ok || !v || v === x.email) return;
+  var r = await sb.rpc("academy_completar_mail", { p_persona: x.persona_id, p_email: v });
+  if (r.error){ msg("pMsg", "err", esc(r.error.code === "P0001" ? r.error.message : "No se pudo guardar el mail: " + r.error.message)); return; }
+  toast(r.data === "unificado" ? "Mail guardado: se unificó con la persona que ya tenía ese mail" : "Mail guardado");
+  cargarPersonas(); if (cur.id) cargarInscriptos();
+}
 $("pBody").addEventListener("click", async function(e){
+  var tr = e.target.closest("tr[data-r]"); if (!tr) return;
+  var x = per.list.find(function(y){ return y.id === tr.dataset.r; }); if (!x) return;
+  if (e.target.closest("[data-rmail]")){ completarMail(x); return; }
   if (!e.target.closest("[data-rdel]")) return;
-  var tr = e.target.closest("tr[data-r]"); var x = per.list.find(function(y){ return y.id === tr.dataset.r; }); if (!x) return;
-  var ok = await modal("Borrar respuesta", "<p>Se borra la respuesta de <b>" + esc(x.nombre) + "</b> (" + esc(x.email) + ") del " + esc(isoToAr(x.fecha)) + ". Si no tiene otras respuestas, también sale de la base de personas. Los cursos en que ya está no cambian. No se puede deshacer.</p>",
+  var ok = await modal("Borrar respuesta", "<p>Se borra la respuesta de <b>" + esc(x.nombre) + "</b> (" + esc(mailTxt(x)) + ") del " + esc(isoToAr(x.fecha)) + ". Si no tiene otras respuestas, también sale de la base de personas. Los cursos en que ya está no cambian. No se puede deshacer.</p>",
     [{ label: "Cancelar", value: false }, { label: "Borrar", value: true, primary: true }]);
   if (!ok) return;
   var r = await sb.from("academy_respuestas").delete().eq("id", x.id);
@@ -898,10 +930,10 @@ $("pExcel").addEventListener("click", async function(){
   var cuenta = {}, ultima = {};
   per.list.forEach(function(x){ cuenta[x.persona_id] = (cuenta[x.persona_id] || 0) + 1; if (!ultima[x.persona_id] || x.fecha > ultima[x.persona_id]) ultima[x.persona_id] = x.fecha; });
   var a1 = [["Nombre y apellido","Mail","Empresa","Cargo","Área","Tipo de puesto","Capacitaciones","Última capacitación","En la base desde"]];
-  p.data.forEach(function(x){ a1.push([x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", puestoDeTexto(x.cargo), cuenta[x.id] || 0, isoToAr(ultima[x.id] || ""), fmtTs(x.created_at)]); });
+  p.data.forEach(function(x){ a1.push([x.nombre, x.email || "", x.empresa, x.cargo || "", x.area || "", puestoDeTexto(x.cargo), cuenta[x.id] || 0, isoToAr(ultima[x.id] || ""), fmtTs(x.created_at)]); });
   var f = personasFiltradas();
   var a2 = [["Fecha","Nombre y apellido","Mail","Empresa","Cargo","Área","Calificación","Observaciones","Curso","Origen","Registrado"]];
-  f.forEach(function(x){ a2.push([isoToAr(x.fecha), x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", x.calificacion || "", x.observaciones || "",
+  f.forEach(function(x){ a2.push([isoToAr(x.fecha), x.nombre, x.email || "", x.empresa, x.cargo || "", x.area || "", x.calificacion || "", x.observaciones || "",
     (per.cursosDe[x.id] || []).map(cursoNombre).join(" / "), x.origen === "qr" ? "QR" : x.origen === "forms" ? "Forms" : "Excel", fmtTs(x.created_at)]); });
   var wb = XLSX.utils.book_new();
   var w1 = XLSX.utils.aoa_to_sheet(a1); w1["!cols"] = [{ wch: 30 }, { wch: 32 }, { wch: 26 }, { wch: 26 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 17 }]; w1["!autofilter"] = { ref: "A1:I" + a1.length };
@@ -1026,16 +1058,16 @@ async function importarABase(p, fuente, origen){
   var validas = [], malas = [];
   p.filas.forEach(function(x){
     if (!x.fecha) malas.push("fila " + x.fila + " (sin fecha)");
-    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email) || x.nombre.length < 3) malas.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : ""));
+    else if ((x.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.email)) || x.nombre.length < 3) malas.push("fila " + x.fila + (x.nombre ? " (" + x.nombre + ")" : ""));
     else validas.push(x);
   });
   var fechas = validas.map(function(x){ return x.fecha; }).sort();
-  var vista = validas.slice(0, 8).map(function(x){ return "<tr><td class=\"mono\">" + esc(isoToAr(x.fecha)) + "</td><td>" + esc(x.nombre) + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa || "Sin empresa") + "</td><td>" + esc(x.cargo) + "</td><td>" + estrellas(x.calificacion) + "</td></tr>"; }).join("");
+  var vista = validas.slice(0, 8).map(function(x){ return "<tr><td class=\"mono\">" + esc(isoToAr(x.fecha)) + "</td><td>" + esc(x.nombre) + "</td><td>" + mailHtml(x) + "</td><td>" + esc(x.empresa || "Sin empresa") + "</td><td>" + esc(x.cargo) + "</td><td>" + estrellas(x.calificacion) + "</td></tr>"; }).join("");
   $("modal").querySelector(".box").classList.add("wide");
   var ok = await modal("Cargar en la base",
     "<p>" + esc(fuente) + ": <b>" + p.filas.length + "</b> filas" + (p.conTitulos === false ? " (sin fila de títulos: se usó el orden Fecha, Nombre y Apellido, Empresa, Cargo, Área, Mail, Calificación, Observaciones)" : "") + ".</p>" +
-    "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + validas.length + "</b> válidas" + (fechas.length ? ", del " + esc(isoToAr(fechas[0])) + " al " + esc(isoToAr(fechas[fechas.length - 1])) : "") + ". Las que ya están en la base (mismo mail y fecha) no se tocan.</li>" +
-    (malas.length ? "<li>" + malas.length + " se omiten por falta de fecha, mail o nombre (" + esc(malas.slice(0, 5).join(", ")) + (malas.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" +
+    "<ul style=\"margin:0 0 8px;padding-left:18px\"><li><b>" + validas.length + "</b> válidas" + (fechas.length ? ", del " + esc(isoToAr(fechas[0])) + " al " + esc(isoToAr(fechas[fechas.length - 1])) : "") + ". Las que ya están en la base (misma persona y fecha) no se tocan.</li>" +
+    (malas.length ? "<li>" + malas.length + " se omiten por falta de fecha o nombre, o por mail mal escrito (" + esc(malas.slice(0, 5).join(", ")) + (malas.length > 5 ? "…" : "") + ")</li>" : "") + "</ul>" +
     (vista ? '<div class="tablebox" style="max-height:240px;margin-bottom:8px"><table style="min-width:0;font-size:12.5px"><thead><tr><th>Fecha</th><th>Nombre</th><th>Mail</th><th>Empresa</th><th>Cargo</th><th>Calif.</th></tr></thead><tbody>' + vista + "</tbody></table></div>" + (validas.length > 8 ? '<p class="muted" style="font-size:12.5px">… y ' + (validas.length - 8) + " más.</p>" : "") : "") +
     (p.col.empresa < 0 ? '<div class="msg warn">No vino la columna Empresa: quedan como «Sin empresa».</div>' : ""),
     [{ label: "Cancelar", value: false }, { label: "Cargar " + validas.length, value: true, primary: true }]);
@@ -1073,7 +1105,8 @@ $("pPegar").addEventListener("click", async function(){
 $("cdAgregar").addEventListener("click", async function(){
   var c = cursoSel(); if (!c) return;
   await cargarPersonas();
-  var ya = new Set(cur.ins.map(function(x){ return x.email.toLowerCase(); }));
+  var ya = new Set(cur.ins.map(function(x){ return x.persona_id || x.email; }));
+  function estaYa(x){ return ya.has(x.persona_id) || (!!x.email && ya.has(x.email)); }
   var marcados = new Set();
   $("modal").querySelector(".box").classList.add("wide");
   var pr = modal("Elegir participantes de la base",
@@ -1088,11 +1121,11 @@ $("cdAgregar").addEventListener("click", async function(){
   function pintar(){
     var v = visibles();
     $("elBody").innerHTML = v.length ? v.slice(0, 800).map(function(x){
-      var esta = ya.has(x.email.toLowerCase());
+      var esta = estaYa(x);
       return '<tr data-r="' + x.id + '"' + (esta ? ' style="opacity:.5"' : "") + '><td class="chk"><input type="checkbox"' + (esta ? " disabled checked" : marcados.has(x.id) ? " checked" : "") + ' aria-label="Elegir ' + esc(x.nombre) + '"></td><td class="mono">' + esc(isoToAr(x.fecha)) +
-        "</td><td>" + esc(x.nombre) + (esta ? ' <span class="pill ok">ya está</span>' : "") + "</td><td>" + esc(x.email) + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + estrellas(x.calificacion) + "</td></tr>";
+        "</td><td>" + esc(x.nombre) + (esta ? ' <span class="pill ok">ya está</span>' : "") + "</td><td>" + mailHtml(x) + "</td><td>" + esc(x.empresa) + "</td><td>" + esc(x.cargo || "") + "</td><td>" + estrellas(x.calificacion) + "</td></tr>";
     }).join("") : '<tr><td colspan="7" class="empty">' + ($("elTodas").checked ? "No hay respuestas con esa búsqueda." : "Nadie se registró con fecha " + esc(isoToAr($("elFecha").value)) + ". Probá con «Todas las fechas».") + "</td></tr>";
-    var libres = v.filter(function(x){ return !ya.has(x.email.toLowerCase()); });
+    var libres = v.filter(function(x){ return !estaYa(x); });
     $("elAll").checked = libres.length > 0 && libres.every(function(x){ return marcados.has(x.id); });
     btn.textContent = "Agregar " + marcados.size + " al curso"; btn.disabled = !marcados.size;
   }
@@ -1100,14 +1133,14 @@ $("cdAgregar").addEventListener("click", async function(){
     var tr = e.target.closest("tr[data-r]"); if (!tr) return;
     var x = per.list.find(function(y){ return y.id === tr.dataset.r; });
     if (e.target.checked){
-      // Una sola respuesta por mail dentro del curso.
-      per.list.forEach(function(y){ if (y.email === x.email) marcados.delete(y.id); });
+      // Una sola respuesta por persona dentro del curso.
+      per.list.forEach(function(y){ if (y.persona_id === x.persona_id) marcados.delete(y.id); });
       marcados.add(x.id);
     } else marcados.delete(x.id);
     pintar();
   });
   $("elAll").addEventListener("change", function(e){
-    visibles().forEach(function(x){ if (ya.has(x.email.toLowerCase())) return; if (e.target.checked){ if (!Array.from(marcados).some(function(id){ var y = per.list.find(function(z){ return z.id === id; }); return y && y.email === x.email; })) marcados.add(x.id); } else marcados.delete(x.id); });
+    visibles().forEach(function(x){ if (estaYa(x)) return; if (e.target.checked){ if (!Array.from(marcados).some(function(id){ var y = per.list.find(function(z){ return z.id === id; }); return y && y.persona_id === x.persona_id; })) marcados.add(x.id); } else marcados.delete(x.id); });
     pintar();
   });
   ["elFecha", "elTodas"].forEach(function(id){ $(id).addEventListener("change", pintar); });
@@ -1129,7 +1162,7 @@ $("cdAgregar").addEventListener("click", async function(){
 $("cdExcel").addEventListener("click", function(){
   var c = cursoSel(); if (!c) return;
   var aoa = [["N.º","Nombre y apellido","Mail","Empresa","Cargo","Área","Tipo de puesto","Calificación","Observaciones","Registrado","Diploma enviado"]];
-  cur.ins.forEach(function(x, i){ var rs = x.respuesta || {}; aoa.push([i + 1, x.nombre, x.email, x.empresa, x.cargo || "", x.area || "", x.puesto || "", rs.calificacion || "", rs.observaciones || "", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
+  cur.ins.forEach(function(x, i){ var rs = x.respuesta || {}; aoa.push([i + 1, x.nombre, x.email || "", x.empresa, x.cargo || "", x.area || "", x.puesto || "", rs.calificacion || "", rs.observaciones || "", fmtFH(x.respondido_at || x.created_at), fmtFH(x.diploma_enviado_at)]); });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 32 }, { wch: 24 }, { wch: 26 }, { wch: 24 }, { wch: 22 }, { wch: 12 }, { wch: 46 }, { wch: 17 }, { wch: 17 }];
   ws["!autofilter"] = { ref: "A1:K" + aoa.length };
@@ -1137,15 +1170,18 @@ $("cdExcel").addEventListener("click", function(){
   save("Inscriptos - " + C.shortCourse(c.titulo, 50) + " - " + isoToAr(c.fecha).replace(/\//g, "-") + ".xlsx", new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })]));
 });
 
-$("cdBorrar").addEventListener("click", async function(){
-  var c = cursoSel(); if (!c) return;
-  var ok = await modal("Eliminar curso", "<p>Se borra «" + esc(c.titulo) + "» con sus " + cur.ins.length + " inscriptos. Los diplomas ya registrados quedan en el Registro. No se puede deshacer.</p>", [{ label: "Cancelar", value: false }, { label: "Eliminar curso", value: true, primary: true }]);
+async function eliminarCurso(id){
+  var c = cur.list.find(function(x){ return x.id === id; }); if (!c) return;
+  var n = cur.counts[c.id] || 0;
+  var ok = await modal("Eliminar curso", "<p>Se borra «" + esc(c.titulo) + "» del " + esc(isoToAr(c.fecha)) + (n ? " con sus " + n + (n === 1 ? " participante" : " participantes") : "") + ". Las personas siguen en la base y los diplomas ya enviados quedan en el Registro. No se puede deshacer.</p>", [{ label: "Cancelar", value: false }, { label: "Eliminar curso", value: true, primary: true }]);
   if (!ok) return;
   var r = await sb.from("academy_cursos").delete().eq("id", c.id);
-  if (r.error){ msg("cdMsg", "err", esc(r.error.message)); return; }
-  if (cur.canal){ sb.removeChannel(cur.canal); cur.canal = null; }
-  cur.id = null; cargarCursos();
-});
+  if (r.error){ msg("cMsg", "err", "No se pudo eliminar: " + esc(r.error.message)); return; }
+  if (cur.id === c.id){ if (cur.canal){ sb.removeChannel(cur.canal); cur.canal = null; } cur.id = null; }
+  toast("Curso eliminado");
+  await cargarCursos(); cargarPersonas();
+}
+$("cdBorrar").addEventListener("click", function(){ if (cur.id) eliminarCurso(cur.id); });
 
 function bytesToB64(bytes){
   var s = "", CH = 0x8000;
@@ -1159,6 +1195,12 @@ $("cdEnviar").addEventListener("click", function(){
 });
 async function enviarDiplomas(set){
   var c = cursoSel(); if (!c) return;
+  var sinMail = set.filter(function(x){ return !x.email; });
+  if (sinMail.length){
+    set = set.filter(function(x){ return x.email; });
+    if (!set.length){ msg("cdMsg", "warn", (sinMail.length === 1 ? esc(sinMail[0].nombre) + " no tiene mail" : "Ninguno de los elegidos tiene mail") + ". Completalo en la columna Mail para poder enviar."); return; }
+    toast(sinMail.length + " sin mail quedan afuera de este envío");
+  }
   var bad = set.filter(function(x){ return cur.status[x.id] && cur.status[x.id].errs.length; });
   if (bad.length){ msg("cdMsg", "err", bad.length + " inscriptos tienen errores en el nombre (" + esc(bad.map(function(x){ return x.nombre; }).join(", ")) + "). Corregilos en la tabla antes de enviar."); return; }
   var re = set.filter(function(x){ return x.diploma_enviado_at; }).length;
